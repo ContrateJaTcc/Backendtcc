@@ -11,36 +11,36 @@ export const test = async (req, res) => {
 export const register = async (req, res) => {
     try {
         const {
-    nome,
-    email,
-    senha,
-    cpf,
-    telefone,
-    data_nasc,
-    cidade,
-    estado,
-    tipo
-} = req.body
+            nome,
+            email,
+            senha,
+            cpf,
+            telefone,
+            data_nasc,
+            cidade,
+            estado,
+            tipo
+        } = req.body
 
         if (
-    !nome ||
-    !email ||
-    !senha ||
-    !cpf ||
-    !telefone ||
-    !data_nasc ||
-    !cidade ||
-    !estado ||
-    !tipo
-) {
-    return res.status(400).json({
-        erro: 'Todos os campos obrigatórios devem ser preenchidos >.<'
-    })
-}
+            !nome ||
+            !email ||
+            !senha ||
+            !cpf ||
+            !telefone ||
+            !data_nasc ||
+            !cidade ||
+            !estado ||
+            !tipo
+        ) {
+            return res.status(400).json({
+                erro: 'Todos os campos obrigatórios devem ser preenchidos >.<'
+            })
+        }
 
         const usuarios = await db('usuario')
-        .select('usu_id')
-        .where('usu_email', email)
+            .select('usu_id')
+            .where('usu_email', email)
 
         if (usuarios.length > 0) {
             return res.status(409).json({
@@ -51,16 +51,16 @@ export const register = async (req, res) => {
         const senhaCriptografada = await bcrypt.hash(senha, 10)
 
         await db('usuario').insert({
-    usu_nome: nome,
-    usu_email: email,
-    usu_senha: senhaCriptografada,
-    usu_cpf: cpf,
-    usu_tel: telefone,
-    usu_data_nasc: data_nasc,
-    usu_cid: cidade,
-    usu_est: estado,
-    usu_tipo: tipo
-})
+            usu_nome: nome,
+            usu_email: email,
+            usu_senha: senhaCriptografada,
+            usu_cpf: cpf,
+            usu_tel: telefone,
+            usu_data_nasc: data_nasc,
+            usu_cid: cidade,
+            usu_est: estado,
+            tipo_usuario: tipo
+        })
 
         return res.status(201).json({
             mensagem: "Usuário cadastrado com sucesso! ^w^"
@@ -68,6 +68,7 @@ export const register = async (req, res) => {
 
     } catch (erro) {
         console.error(erro)
+
         return res.status(500).json({
             erro: "Erro ao cadastrar usuário >.<"
         })
@@ -85,8 +86,8 @@ export const login = async (req, res) => {
         }
 
         const usuarios = await db('usuario')
-    .select('*')
-    .where('usu_email', email)
+            .select('*')
+            .where('usu_email', email)
 
         if (usuarios.length === 0) {
             return res.status(404).json({
@@ -96,7 +97,10 @@ export const login = async (req, res) => {
 
         const usuario = usuarios[0]
 
-        const senhaCorreta = await bcrypt.compare(senha, usuario.usu_senha)
+        const senhaCorreta = await bcrypt.compare(
+            senha,
+            usuario.usu_senha
+        )
 
         if (!senhaCorreta) {
             return res.status(401).json({
@@ -105,11 +109,11 @@ export const login = async (req, res) => {
         }
 
         const token = jwt.sign(
-    {
-        id: usuario.usu_id,
-        email: usuario.usu_email,
-        tipo: usuario.usu_tipo
-    },
+            {
+                id: usuario.usu_id,
+                email: usuario.usu_email,
+                tipo: usuario.tipo_usuario
+            },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         )
@@ -121,6 +125,7 @@ export const login = async (req, res) => {
 
     } catch (erro) {
         console.error(erro)
+
         return res.status(500).json({
             erro: "Erro ao realizar login DX"
         })

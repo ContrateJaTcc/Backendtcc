@@ -38,39 +38,61 @@ export const register = async (req, res) => {
             })
         }
 
-        const usuarios = await db('usuario')
+        if (tipo !== 'freelancer' && tipo !== 'contratante') {
+            return res.status(400).json({
+                erro: 'Tipo de usuário inválido.'
+            })
+        }
+
+        const usuarioExistente = await db('usuario')
             .select('usu_id')
             .where('usu_email', email)
+            .first()
 
-        if (usuarios.length > 0) {
+        if (usuarioExistente) {
             return res.status(409).json({
-                erro: "Este e-mail já está sendo usado O.o"
+                erro: 'Este e-mail já está sendo usado O.o'
             })
         }
 
         const senhaCriptografada = await bcrypt.hash(senha, 10)
 
-        await db('usuario').insert({
-            usu_nome: nome,
-            usu_email: email,
-            usu_senha: senhaCriptografada,
-            usu_cpf: cpf,
-            usu_tel: telefone,
-            usu_data_nasc: data_nasc,
-            usu_cid: cidade,
-            usu_est: estado,
-            tipo_usuario: tipo
+        await db.transaction(async (trx) => {
+
+            const [usu_id] = await trx('usuario').insert({
+                usu_nome: nome,
+                usu_email: email,
+                usu_senha: senhaCriptografada,
+                usu_cpf: cpf,
+                usu_tel: telefone,
+                usu_data_nasc: data_nasc,
+                usu_cid: cidade,
+                usu_est: estado,
+                tipo_usuario: tipo
+            })
+
+            if (tipo === 'contratante') {
+                await trx('contratante').insert({
+                    usu_id
+                })
+            }
+
+            if (tipo === 'freelancer') {
+                await trx('freelancer').insert({
+                    usu_id
+                })
+            }
         })
 
         return res.status(201).json({
-            mensagem: "Usuário cadastrado com sucesso! ^w^"
+            mensagem: 'Usuário cadastrado com sucesso! ^w^'
         })
 
     } catch (erro) {
         console.error(erro)
 
         return res.status(500).json({
-            erro: "Erro ao cadastrar usuário >.<"
+            erro: 'Erro ao cadastrar usuário >.<'
         })
     }
 }
@@ -91,7 +113,7 @@ export const login = async (req, res) => {
 
         if (usuarios.length === 0) {
             return res.status(404).json({
-                erro: "Usuário não encontrado O~o"
+                erro: 'Usuário não encontrado O~o'
             })
         }
 
@@ -104,7 +126,7 @@ export const login = async (req, res) => {
 
         if (!senhaCorreta) {
             return res.status(401).json({
-                erro: "Senha incorreta :P"
+                erro: 'Senha incorreta :P'
             })
         }
 
@@ -119,7 +141,7 @@ export const login = async (req, res) => {
         )
 
         return res.json({
-            mensagem: "Login bem-sucedido! ^w^",
+            mensagem: 'Login bem-sucedido! ^w^',
             token
         })
 
@@ -127,7 +149,7 @@ export const login = async (req, res) => {
         console.error(erro)
 
         return res.status(500).json({
-            erro: "Erro ao realizar login DX"
+            erro: 'Erro ao realizar login DX'
         })
     }
 }

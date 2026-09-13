@@ -86,3 +86,67 @@ export const criarServico = async (req, res) => {
         })
     }
 }
+
+export const listarMeusServicos = async (req, res) => {
+    try {
+        if (req.usuario.tipo !== 'contratante') {
+            return res.status(403).json({
+                erro: 'Apenas contratantes podem visualizar seus projetos.'
+            })
+        }
+
+        const contratante = await db('contratante')
+            .select('cont_id')
+            .where('usu_id', req.usuario.id)
+            .first()
+
+        if (!contratante) {
+            return res.status(404).json({
+                erro: 'Contratante não encontrado.'
+            })
+        }
+
+        const projetos = await db('servico')
+            .join(
+                'tipo_servico',
+                'servico.tipo_id',
+                'tipo_servico.tipo_id'
+            )
+            .where('servico.cont_id', contratante.cont_id)
+            .select(
+                'servico.serv_id',
+                'servico.cont_id',
+                'servico.tipo_id',
+                'tipo_servico.tipo_nome as categoria',
+                'servico.serv_titulo',
+                'servico.serv_desc',
+                'servico.serv_valor',
+                'servico.serv_tipo_valor',
+                'servico.serv_data_inicio',
+                'servico.serv_qtd_dias',
+                'servico.serv_local',
+                'servico.serv_cidade',
+                'servico.serv_estado',
+                'servico.serv_habilidades',
+                'servico.serv_forma_pagamento',
+                'servico.serv_vagas',
+                'servico.serv_status',
+                'servico.serv_data_criacao',
+                'servico.serv_data_atualizacao'
+            )
+            .orderBy('servico.serv_id', 'desc')
+
+        return res.json({
+            projetos
+        })
+
+    } catch (erro) {
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao listar projetos.'
+        })
+    }
+}
+
+console.log('listarMeusServicos:', typeof listarMeusServicos)

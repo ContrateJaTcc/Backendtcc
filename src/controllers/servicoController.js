@@ -168,34 +168,56 @@ export const buscarServicoPorId = async (req, res) => {
         }
 
         const projeto = await db('servico')
-            .join(
-                'tipo_servico',
-                'servico.tipo_id',
-                'tipo_servico.tipo_id'
-            )
+    .join(
+        'tipo_servico',
+        'servico.tipo_id',
+        'tipo_servico.tipo_id'
+    )
+    .join(
+        'contratante',
+        'servico.cont_id',
+        'contratante.cont_id'
+    )
+    .join(
+        'usuario',
+        'contratante.usu_id',
+        'usuario.usu_id'
+    )
             .where('servico.serv_id', req.params.id)
             .where('servico.cont_id', contratante.cont_id)
             .select(
-                'servico.serv_id',
-                'servico.cont_id',
-                'servico.tipo_id',
-                'tipo_servico.tipo_nome as categoria',
-                'servico.serv_titulo',
-                'servico.serv_desc',
-                'servico.serv_valor',
-                'servico.serv_tipo_valor',
-                'servico.serv_data_inicio',
-                'servico.serv_qtd_dias',
-                'servico.serv_local',
-                'servico.serv_cidade',
-                'servico.serv_estado',
-                'servico.serv_habilidades',
-                'servico.serv_forma_pagamento',
-                'servico.serv_vagas',
-                'servico.serv_status',
-                'servico.serv_data_criacao',
-                'servico.serv_data_atualizacao'
-            )
+    'servico.serv_id',
+    'servico.cont_id',
+    'servico.tipo_id',
+    'tipo_servico.tipo_nome as categoria',
+    'servico.serv_titulo',
+    'servico.serv_desc',
+    'servico.serv_valor',
+    'servico.serv_tipo_valor',
+    'servico.serv_data_inicio',
+    'servico.serv_qtd_dias',
+    'servico.serv_local',
+    'servico.serv_cidade',
+    'servico.serv_estado',
+    'servico.serv_habilidades',
+    'servico.serv_forma_pagamento',
+    'servico.serv_vagas',
+    'servico.serv_status',
+    'servico.serv_data_criacao',
+    'servico.serv_data_atualizacao',
+    'usuario.usu_nome as contratante_nome',
+'usuario.usu_desc as contratante_desc',
+'usuario.usu_foto as contratante_foto',
+'usuario.data_criacao as contratante_data_criacao',
+
+db.raw(`
+    (
+        SELECT COUNT(*)
+        FROM servico AS s2
+        WHERE s2.cont_id = servico.cont_id
+        AND s2.serv_status = 'aberto'
+    ) AS contratante_servicos_postados
+`))
             .first()
 
         if (!projeto) {

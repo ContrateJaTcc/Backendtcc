@@ -150,74 +150,63 @@ export const listarMeusServicos = async (req, res) => {
 }
 export const buscarServicoPorId = async (req, res) => {
     try {
-        if (req.usuario.tipo !== 'contratante') {
-            return res.status(403).json({
-                erro: 'Apenas contratantes podem visualizar seus projetos.'
-            })
-        }
-
-        const contratante = await db('contratante')
-            .select('cont_id')
-            .where('usu_id', req.usuario.id)
-            .first()
-
-        if (!contratante) {
-            return res.status(404).json({
-                erro: 'Contratante não encontrado.'
-            })
-        }
-
         const projeto = await db('servico')
-    .join(
-        'tipo_servico',
-        'servico.tipo_id',
-        'tipo_servico.tipo_id'
-    )
-    .join(
-        'contratante',
-        'servico.cont_id',
-        'contratante.cont_id'
-    )
-    .join(
-        'usuario',
-        'contratante.usu_id',
-        'usuario.usu_id'
-    )
+            .join(
+                'tipo_servico',
+                'servico.tipo_id',
+                'tipo_servico.tipo_id'
+            )
+            .join(
+                'contratante',
+                'servico.cont_id',
+                'contratante.cont_id'
+            )
+            .join(
+                'usuario',
+                'contratante.usu_id',
+                'usuario.usu_id'
+            )
             .where('servico.serv_id', req.params.id)
-            .where('servico.cont_id', contratante.cont_id)
+            .where(function () {
+                if (req.usuario.tipo === 'contratante') {
+                    this.where('contratante.usu_id', req.usuario.id)
+                } else {
+                    this.where('servico.serv_status', 'aberto')
+                }
+            })
             .select(
-    'servico.serv_id',
-    'servico.cont_id',
-    'servico.tipo_id',
-    'tipo_servico.tipo_nome as categoria',
-    'servico.serv_titulo',
-    'servico.serv_desc',
-    'servico.serv_valor',
-    'servico.serv_tipo_valor',
-    'servico.serv_data_inicio',
-    'servico.serv_qtd_dias',
-    'servico.serv_local',
-    'servico.serv_cidade',
-    'servico.serv_estado',
-    'servico.serv_habilidades',
-    'servico.serv_forma_pagamento',
-    'servico.serv_vagas',
-    'servico.serv_status',
-    'servico.serv_data_criacao',
-    'servico.serv_data_atualizacao',
-    'usuario.usu_nome as contratante_nome',
-'usuario.usu_desc as contratante_desc',
-'usuario.usu_foto as contratante_foto',
-'usuario.data_criacao as contratante_data_criacao',
-
-db.raw(`
-    (
-        SELECT COUNT(*)
-        FROM servico AS s2
-        WHERE s2.cont_id = servico.cont_id
-        AND s2.serv_status = 'aberto'
-    ) AS contratante_servicos_postados
-`))
+                'servico.serv_id',
+                'servico.cont_id',
+                'servico.tipo_id',
+                'tipo_servico.tipo_nome as categoria',
+                'servico.serv_titulo',
+                'servico.serv_desc',
+                'servico.serv_valor',
+                'servico.serv_tipo_valor',
+                'servico.serv_data_inicio',
+                'servico.serv_qtd_dias',
+                'servico.serv_local',
+                'servico.serv_cidade',
+                'servico.serv_estado',
+                'servico.serv_habilidades',
+                'servico.serv_forma_pagamento',
+                'servico.serv_vagas',
+                'servico.serv_status',
+                'servico.serv_data_criacao',
+                'servico.serv_data_atualizacao',
+                'usuario.usu_nome as contratante_nome',
+                'usuario.usu_desc as contratante_desc',
+                'usuario.usu_foto as contratante_foto',
+                'usuario.data_criacao as contratante_data_criacao',
+                db.raw(`
+                    (
+                        SELECT COUNT(*)
+                        FROM servico AS s2
+                        WHERE s2.cont_id = servico.cont_id
+                        AND s2.serv_status = 'aberto'
+                    ) AS contratante_servicos_postados
+                `)
+            )
             .first()
 
         if (!projeto) {
@@ -227,6 +216,7 @@ db.raw(`
         }
 
         return res.json({ projeto })
+
     } catch (erro) {
         console.error(erro)
 
@@ -234,8 +224,6 @@ db.raw(`
             erro: 'Erro ao buscar projeto.'
         })
     }
-
-    
 }
 export const atualizarServico = async (req, res) => {
     try {
@@ -311,6 +299,50 @@ export const atualizarServico = async (req, res) => {
 
         return res.status(500).json({
             erro: 'Erro ao atualizar projeto.'
+        })
+    }
+    
+}
+export const listarOutrosServicos = async (req, res) => {
+    try {
+        const servicoAtual = await db('servico')
+            .select('cont_id')
+            .where('serv_id', req.params.id)
+            .first()
+
+        if (!servicoAtual) {
+            return res.status(404).json({
+                erro: 'Projeto não encontrado.'
+            })
+        }
+
+        const projetos = await db('servico')
+            .join(
+                'tipo_servico',
+                'servico.tipo_id',
+                'tipo_servico.tipo_id'
+            )
+            .where('servico.cont_id', servicoAtual.cont_id)
+            .where('servico.serv_status', 'aberto')
+            .whereNot('servico.serv_id', req.params.id)
+            .select(
+                'servico.serv_id',
+                'servico.serv_titulo',
+                'servico.serv_desc',
+                'servico.serv_valor',
+                'servico.serv_tipo_valor',
+                'servico.serv_qtd_dias',
+                'servico.serv_data_criacao',
+                'tipo_servico.tipo_nome as categoria'
+            )
+            .orderBy('servico.serv_data_criacao', 'desc')
+
+        return res.json({ projetos })
+    } catch (erro) {
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao buscar outros serviços.'
         })
     }
 }

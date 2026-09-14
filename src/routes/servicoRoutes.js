@@ -8,6 +8,8 @@ router.get('/meus', auth, servicoController.listarMeusServicos)
 
 router.get('/:id', auth, servicoController.buscarServicoPorId)
 
+router.put('/:id', auth, servicoController.atualizarServico)
+
 router.post('/', auth, servicoController.criarServico)
 
 export default router

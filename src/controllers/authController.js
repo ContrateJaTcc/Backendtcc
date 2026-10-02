@@ -145,11 +145,11 @@ export const login = async (req, res) => {
             token
         })
 
-    } catch (erro) {
-        console.error(erro)
-
-        return res.status(500).json({
-            erro: 'Erro ao realizar login DX'
-        })
-    }
+    } catch (error) {
+    console.error(error);
+    res.status(500).json({
+        erro: "erro ao realizar login DX",
+        detalhe: error.message
+    });
+}
 }

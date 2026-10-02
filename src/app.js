@@ -5,7 +5,6 @@ import usuarioRoutes from './routes/usuarioRoutes.js'
 import servicoRoutes from './routes/servicoRoutes.js'
 
 const app = express()
-
 app.use(cors())
 app.use(express.json())
 

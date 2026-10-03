@@ -194,6 +194,7 @@ export const buscarServicoPorId = async (req, res) => {
                 'servico.serv_status',
                 'servico.serv_data_criacao',
                 'servico.serv_data_atualizacao',
+                'usuario.usu_id as contratante_usu_id',
                 'usuario.usu_nome as contratante_nome',
                 'usuario.usu_desc as contratante_desc',
                 'usuario.usu_foto as contratante_foto',
@@ -205,7 +206,31 @@ export const buscarServicoPorId = async (req, res) => {
                         WHERE s2.cont_id = servico.cont_id
                         AND s2.serv_status = 'aberto'
                     ) AS contratante_servicos_postados
-                `)
+                `),
+                /* Reputacao do contratante: o que os freelancers deram a ele. */
+                db.raw(`
+                    (
+                        SELECT ROUND(AVG(a.aval_nota), 1)
+                        FROM avaliacao AS a
+                        WHERE a.usu_avaliado = usuario.usu_id
+                    ) AS contratante_nota
+                `),
+                db.raw(`
+                    (
+                        SELECT COUNT(*)
+                        FROM avaliacao AS a
+                        WHERE a.usu_avaliado = usuario.usu_id
+                    ) AS contratante_total_avaliacoes
+                `),
+                /* Para o freelancer nao ver "Candidatar-se" num projeto em que ja se candidatou. */
+                db.raw(`
+                    (
+                        SELECT COUNT(*)
+                        FROM candidatura AS c
+                        JOIN freelancer AS f ON f.free_id = c.free_id
+                        WHERE c.serv_id = servico.serv_id AND f.usu_id = ?
+                    ) AS ja_candidatado
+                `, [req.usuario.id])
             )
             .first()
 
@@ -269,6 +294,20 @@ export const atualizarServico = async (req, res) => {
         if (!projeto) {
             return res.status(404).json({
                 erro: 'Projeto não encontrado.'
+            })
+        }
+
+        /*
+         * A edicao so publica ou volta para rascunho. Em andamento, finalizado
+         * e cancelado tem fluxos proprios: aceitar candidatura e
+         * PUT /servicos/:id/finalizar (que concede o XP). Sem esta trava,
+         * mandar status "finalizado" aqui pulava tudo isso.
+         */
+        const EDITAVEIS = ['rascunho', 'aberto']
+
+        if (!EDITAVEIS.includes(status) || !EDITAVEIS.includes(projeto.serv_status)) {
+            return res.status(400).json({
+                erro: 'Só é possível editar projetos em rascunho ou abertos.'
             })
         }
 

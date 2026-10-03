@@ -1,6 +1,9 @@
 import db from '../config/knex.js'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
+import { verificarTokenGoogle, ErroGoogle } from '../services/google.js'
+import { enviarEmail } from '../services/email.js'
 
 export const test = async (req, res) => {
     res.json({
@@ -8,19 +11,68 @@ export const test = async (req, res) => {
     })
 }
 
+/*
+ * Aceita CPF com ou sem mascara: 000.000.000-00 ou 00000000000.
+ * Telefone com ou sem mascara, DDD de 2 digitos e numero de 8 ou 9 digitos:
+ * (11) 91234-5678, 11912345678, (11) 1234-5678, 1112345678.
+ * Depois de validado, o valor e gravado so com os digitos, porque as colunas
+ * usu_cpf e usu_tel tem 11 caracteres.
+ */
+const REGEX_CPF = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/
+const REGEX_TELEFONE = /^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/
+const REGEX_ESTADO = /^[A-Za-z]{2}$/
+const SENHA_MINIMA = 6
+
+const gerarToken = (usuario) => jwt.sign(
+    {
+        id: usuario.usu_id,
+        email: usuario.usu_email,
+        tipo: usuario.tipo_usuario
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+)
+
+// O tipo vem do banco, nao do que o usuario escolheu na tela:
+// sem isso o frontend so tem o botao clicado para decidir a area.
+const respostaLogin = (usuario) => ({
+    mensagem: 'Login bem-sucedido! ^w^',
+    token: gerarToken(usuario),
+    tipo: usuario.tipo_usuario,
+    usuario: {
+        id: usuario.usu_id,
+        nome: usuario.usu_nome,
+        email: usuario.usu_email,
+        tipo: usuario.tipo_usuario
+    }
+})
+
 export const register = async (req, res) => {
     try {
         const {
             nome,
-            email,
-            senha,
             cpf,
             telefone,
             data_nasc,
             cidade,
             estado,
-            tipo
+            tipo,
+            googleToken
         } = req.body
+
+        let { email, senha } = req.body
+
+        /*
+         * Cadastro vindo do "Continuar com Google": o e-mail e o que o Google
+         * confirmou (o do corpo e ignorado) e a conta nao tem senha propria.
+         * Gravamos um hash aleatorio para a coluna NOT NULL; se a pessoa
+         * quiser entrar por e-mail e senha depois, usa "esqueci a senha".
+         */
+        if (googleToken) {
+            const google = await verificarTokenGoogle(googleToken)
+            email = google.email
+            senha = crypto.randomBytes(32).toString('hex')
+        }
 
         if (
             !nome ||
@@ -44,6 +96,38 @@ export const register = async (req, res) => {
             })
         }
 
+        if (String(senha).length < SENHA_MINIMA) {
+            return res.status(400).json({
+                erro: `A senha deve ter pelo menos ${SENHA_MINIMA} caracteres.`
+            })
+        }
+
+        const cpfTexto = String(cpf).trim()
+        const telTexto = String(telefone).trim()
+        const estadoTexto = String(estado).trim()
+
+        if (!REGEX_CPF.test(cpfTexto)) {
+            return res.status(400).json({
+                erro: 'CPF inválido. Use o formato 000.000.000-00 ou 11 dígitos.'
+            })
+        }
+
+        if (!REGEX_TELEFONE.test(telTexto)) {
+            return res.status(400).json({
+                erro: 'Telefone inválido. Use o formato (00) 00000-0000 ou (00) 0000-0000.'
+            })
+        }
+
+        if (!REGEX_ESTADO.test(estadoTexto)) {
+            return res.status(400).json({
+                erro: 'Estado inválido. Use a sigla de 2 letras (ex.: SP).'
+            })
+        }
+
+        const cpfLimpo = cpfTexto.replace(/\D/g, '')
+        const telLimpo = telTexto.replace(/\D/g, '')
+        const estadoLimpo = estadoTexto.toUpperCase()
+
         const usuarioExistente = await db('usuario')
             .select('usu_id')
             .where('usu_email', email)
@@ -55,6 +139,17 @@ export const register = async (req, res) => {
             })
         }
 
+        const cpfExistente = await db('usuario')
+            .select('usu_id')
+            .where('usu_cpf', cpfLimpo)
+            .first()
+
+        if (cpfExistente) {
+            return res.status(409).json({
+                erro: 'Este CPF já está cadastrado O.o'
+            })
+        }
+
         const senhaCriptografada = await bcrypt.hash(senha, 10)
 
         await db.transaction(async (trx) => {
@@ -63,11 +158,11 @@ export const register = async (req, res) => {
                 usu_nome: nome,
                 usu_email: email,
                 usu_senha: senhaCriptografada,
-                usu_cpf: cpf,
-                usu_tel: telefone,
+                usu_cpf: cpfLimpo,
+                usu_tel: telLimpo,
                 usu_data_nasc: data_nasc,
                 usu_cid: cidade,
-                usu_est: estado,
+                usu_est: estadoLimpo,
                 tipo_usuario: tipo
             })
 
@@ -84,12 +179,32 @@ export const register = async (req, res) => {
             }
         })
 
+        /* Pelo Google a pessoa nao tem senha para digitar no login,
+           entao ja devolvemos a sessao. */
+        if (googleToken) {
+            const usuario = await db('usuario').where('usu_email', email).first()
+
+            return res.status(201).json(respostaLogin(usuario))
+        }
+
         return res.status(201).json({
             mensagem: 'Usuário cadastrado com sucesso! ^w^'
         })
 
     } catch (erro) {
+        if (erro instanceof ErroGoogle) {
+            return res.status(401).json({ erro: erro.message })
+        }
+
         console.error(erro)
+
+        /* Dois cadastros simultaneos podem passar pelas consultas acima;
+           a chave unica do banco e a ultima barreira. */
+        if (erro.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({
+                erro: 'E-mail ou CPF já cadastrado O.o'
+            })
+        }
 
         return res.status(500).json({
             erro: 'Erro ao cadastrar usuário >.<'
@@ -130,26 +245,177 @@ export const login = async (req, res) => {
             })
         }
 
-        const token = jwt.sign(
-            {
-                id: usuario.usu_id,
-                email: usuario.usu_email,
-                tipo: usuario.tipo_usuario
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: '1h' }
-        )
+        return res.json(respostaLogin(usuario))
+
+    } catch (erro) {
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao realizar login DX'
+        })
+    }
+}
+
+/*
+ * "Continuar com Google".
+ *
+ * E-mail ja cadastrado: entra direto. E-mail novo: o banco exige CPF,
+ * telefone etc., que o Google nao fornece, entao devolvemos os dados que
+ * temos para o frontend abrir o cadastro ja preenchido.
+ */
+export const loginGoogle = async (req, res) => {
+    try {
+        const google = await verificarTokenGoogle(req.body.accessToken)
+
+        const usuario = await db('usuario')
+            .where('usu_email', google.email)
+            .first()
+
+        if (usuario) {
+            return res.json(respostaLogin(usuario))
+        }
 
         return res.json({
-            mensagem: 'Login bem-sucedido! ^w^',
-            token
+            cadastroNecessario: true,
+            google: {
+                email: google.email,
+                nome: google.nome,
+                sobrenome: google.sobrenome
+            }
         })
 
-    } catch (error) {
-    console.error(error);
-    res.status(500).json({
-        erro: "erro ao realizar login DX",
-        detalhe: error.message
-    });
+    } catch (erro) {
+        if (erro instanceof ErroGoogle) {
+            return res.status(401).json({ erro: erro.message })
+        }
+
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao entrar com o Google DX'
+        })
+    }
 }
+
+const VALIDADE_LINK_MINUTOS = 60
+
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex')
+
+/*
+ * Responde sempre a mesma mensagem, exista o e-mail ou nao: uma resposta
+ * diferente deixaria qualquer um descobrir quem tem conta na plataforma.
+ */
+export const esqueciSenha = async (req, res) => {
+    const resposta = {
+        mensagem: 'Se este e-mail estiver cadastrado, enviaremos um link para redefinir a senha.'
+    }
+
+    try {
+        const email = String(req.body.email || '').trim()
+
+        if (!email) {
+            return res.status(400).json({ erro: 'Informe o e-mail.' })
+        }
+
+        const usuario = await db('usuario')
+            .select('usu_id', 'usu_nome', 'usu_email')
+            .where('usu_email', email)
+            .first()
+
+        if (!usuario) {
+            return res.json(resposta)
+        }
+
+        const token = crypto.randomBytes(32).toString('hex')
+        const expira = new Date(Date.now() + VALIDADE_LINK_MINUTOS * 60 * 1000)
+
+        await db('redefinicao_senha').insert({
+            usu_id: usuario.usu_id,
+            red_token_hash: hashToken(token),
+            red_expira: expira
+        })
+
+        const frontend = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')
+        const link = `${frontend}/redefinir-senha?token=${token}`
+        const primeiroNome = usuario.usu_nome.split(' ')[0]
+
+        await enviarEmail({
+            para: usuario.usu_email,
+            assunto: 'Redefinição de senha - ContrateJá',
+            texto:
+                `Olá, ${primeiroNome}!\n\n` +
+                `Recebemos um pedido para redefinir a sua senha. Acesse o link abaixo ` +
+                `(válido por ${VALIDADE_LINK_MINUTOS} minutos):\n\n${link}\n\n` +
+                `Se não foi você, ignore este e-mail; sua senha continua a mesma.`,
+            html:
+                `<p>Olá, ${primeiroNome}!</p>` +
+                `<p>Recebemos um pedido para redefinir a sua senha. ` +
+                `O link vale por ${VALIDADE_LINK_MINUTOS} minutos.</p>` +
+                `<p><a href="${link}">Redefinir minha senha</a></p>` +
+                `<p>Se não foi você, ignore este e-mail; sua senha continua a mesma.</p>`
+        })
+
+        return res.json(resposta)
+
+    } catch (erro) {
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Não foi possível enviar o e-mail de redefinição. Tente novamente.'
+        })
+    }
+}
+
+export const redefinirSenha = async (req, res) => {
+    try {
+        const { token, senha } = req.body
+
+        if (!token || !senha) {
+            return res.status(400).json({ erro: 'Token e nova senha são obrigatórios.' })
+        }
+
+        if (String(senha).length < SENHA_MINIMA) {
+            return res.status(400).json({
+                erro: `A senha deve ter pelo menos ${SENHA_MINIMA} caracteres.`
+            })
+        }
+
+        const pedido = await db('redefinicao_senha')
+            .where('red_token_hash', hashToken(String(token)))
+            .where('red_usado', false)
+            .where('red_expira', '>', new Date())
+            .first()
+
+        if (!pedido) {
+            return res.status(400).json({
+                erro: 'Link inválido ou expirado. Peça um novo em "Esqueci minha senha".'
+            })
+        }
+
+        const senhaCriptografada = await bcrypt.hash(senha, 10)
+
+        /* Troca a senha e invalida todos os links pendentes do usuario,
+           nao so o usado: um link antigo nao pode continuar valendo. */
+        await db.transaction(async (trx) => {
+            await trx('usuario')
+                .where('usu_id', pedido.usu_id)
+                .update({
+                    usu_senha: senhaCriptografada,
+                    data_atualizacao: trx.fn.now()
+                })
+
+            await trx('redefinicao_senha')
+                .where('usu_id', pedido.usu_id)
+                .update({ red_usado: true })
+        })
+
+        return res.json({ mensagem: 'Senha redefinida com sucesso! Entre com a nova senha.' })
+
+    } catch (erro) {
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao redefinir a senha >.<'
+        })
+    }
 }

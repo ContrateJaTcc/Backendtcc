@@ -7,14 +7,10 @@ const router = express.Router()
 router.get('/', authController.test)
 router.post('/register', authController.register)
 router.post('/login', authController.login)
-router.post('/google', authController.loginGoogle)
 router.get('/perfil', auth, (req, res) => {
-
     res.json({
-
         mensagem: "Você está autenticado yiipiies",
         usuario: req.usuario
-
     })
 })
 

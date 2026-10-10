@@ -1,16 +1,11 @@
 import db from '../config/knex.js'
 
-/*
- * candidatura.free_id referencia freelancer.free_id, nao usuario.usu_id.
- * Estes helpers evitam repetir a traducao em cada rota.
- */
 const buscarFreelancer = (usu_id) =>
     db('freelancer').select('free_id').where('usu_id', usu_id).first()
 
 const buscarContratante = (usu_id) =>
     db('contratante').select('cont_id').where('usu_id', usu_id).first()
 
-/* Campos do servico usados nas listagens, no mesmo formato de servicoController. */
 const COLUNAS_SERVICO = [
     'servico.serv_id',
     'servico.tipo_id',
@@ -29,16 +24,10 @@ const COLUNAS_SERVICO = [
     'servico.serv_data_criacao'
 ]
 
-/*
- * GET /servicos/abertos — o que o freelancer ve no dashboard.
- *
- * Esta rota faltava: a tela do freelancer mostrava dados falsos porque nao
- * havia como listar os servicos disponiveis.
- */
+// GET /servicos/abertos
 export const listarServicosAbertos = async (req, res) => {
     try {
         const { busca, tipo_id } = req.query
-
         const freelancer = await buscarFreelancer(req.usuario.id)
 
         const projetos = await db('servico')
@@ -49,10 +38,11 @@ export const listarServicosAbertos = async (req, res) => {
             .modify((q) => {
                 if (busca) {
                     q.where((sub) => {
-                        sub.where('servico.serv_titulo', 'like', '%' + busca + '%')
-                            .orWhere('servico.serv_desc', 'like', '%' + busca + '%')
+                        sub.where('servico.serv_titulo', 'like', `%${busca}%`)
+                            .orWhere('servico.serv_desc', 'like', `%${busca}%`)
                     })
                 }
+
                 if (tipo_id) q.where('servico.tipo_id', tipo_id)
             })
             .select(
@@ -62,16 +52,13 @@ export const listarServicosAbertos = async (req, res) => {
             )
             .orderBy('servico.serv_id', 'desc')
 
-        /*
-         * Marca o que o freelancer ja se candidatou, para a tela mostrar
-         * "Candidatura enviada" em vez de oferecer o botao de novo.
-         */
         let idsCandidatados = []
 
         if (freelancer && projetos.length > 0) {
             const candidaturas = await db('candidatura')
                 .select('serv_id')
                 .where('free_id', freelancer.free_id)
+                .whereNot('cand_status', 'cancelada')
                 .whereIn('serv_id', projetos.map((p) => p.serv_id))
 
             idsCandidatados = candidaturas.map((c) => c.serv_id)
@@ -83,17 +70,15 @@ export const listarServicosAbertos = async (req, res) => {
                 ja_candidatado: idsCandidatados.includes(p.serv_id)
             }))
         })
-
     } catch (erro) {
         console.error(erro)
-
         return res.status(500).json({
             erro: 'Erro ao listar projetos disponíveis.'
         })
     }
 }
 
-/* POST /servicos/:id/candidaturas — freelancer se candidata. */
+// POST /servicos/:id/candidaturas
 export const candidatarSe = async (req, res) => {
     try {
         if (req.usuario.tipo !== 'freelancer') {
@@ -128,29 +113,33 @@ export const candidatarSe = async (req, res) => {
         }
 
         const jaExiste = await db('candidatura')
-            .select('cand_id')
-            .where({ free_id: freelancer.free_id, serv_id: servico.serv_id })
+            .select('cand_id', 'cand_status')
+            .where({
+                free_id: freelancer.free_id,
+                serv_id: servico.serv_id
+            })
             .first()
 
         if (jaExiste && jaExiste.cand_status !== 'cancelada') {
-    return res.status(409).json({
-        erro: 'Você já se candidatou a este projeto.'
-    })
-}
+            return res.status(409).json({
+                erro: 'Você já se candidatou a este projeto.'
+            })
+        }
 
-if (jaExiste && jaExiste.cand_status === 'cancelada') {
-    await db('candidatura')
-        .where('cand_id', jaExiste.cand_id)
-        .update({
-            cand_status: 'pendente',
-            cand_data: db.fn.now()
-        })
+        // Reativa a candidatura existente se ela havia sido cancelada.
+        if (jaExiste && jaExiste.cand_status === 'cancelada') {
+            await db('candidatura')
+                .where('cand_id', jaExiste.cand_id)
+                .update({
+                    cand_status: 'pendente',
+                    cand_data: db.fn.now()
+                })
 
-    return res.status(201).json({
-        mensagem: 'Candidatura enviada novamente!',
-        cand_id: jaExiste.cand_id
-    })
-}
+            return res.json({
+                mensagem: 'Candidatura enviada novamente!',
+                cand_id: jaExiste.cand_id
+            })
+        }
 
         const [cand_id] = await db('candidatura').insert({
             free_id: freelancer.free_id,
@@ -161,17 +150,15 @@ if (jaExiste && jaExiste.cand_status === 'cancelada') {
             mensagem: 'Candidatura enviada!',
             cand_id
         })
-
     } catch (erro) {
         console.error(erro)
-
         return res.status(500).json({
             erro: 'Erro ao enviar candidatura.'
         })
     }
 }
 
-/* DELETE /servicos/:id/candidaturas — freelancer cancela a própria candidatura. */
+// DELETE /servicos/:id/candidaturas
 export const cancelarCandidatura = async (req, res) => {
     try {
         if (req.usuario.tipo !== 'freelancer') {
@@ -189,21 +176,24 @@ export const cancelarCandidatura = async (req, res) => {
         }
 
         const candidatura = await db('candidatura')
-            .where({
-                free_id: freelancer.free_id,
-                serv_id: req.params.id
-            })
+            .join('servico', 'candidatura.serv_id', 'servico.serv_id')
+            .select(
+                'candidatura.cand_id',
+                'candidatura.cand_status'
+            )
+            .where('candidatura.serv_id', req.params.id)
+            .where('candidatura.free_id', freelancer.free_id)
             .first()
 
         if (!candidatura) {
             return res.status(404).json({
-                erro: 'Candidatura não encontrada.'
+                erro: 'Sua candidatura para este projeto não foi encontrada.'
             })
         }
 
         if (candidatura.cand_status !== 'pendente') {
             return res.status(400).json({
-                erro: 'Só é possível cancelar candidaturas pendentes.'
+                erro: 'Só é possível cancelar uma candidatura pendente.'
             })
         }
 
@@ -212,18 +202,17 @@ export const cancelarCandidatura = async (req, res) => {
             .update({ cand_status: 'cancelada' })
 
         return res.json({
-            mensagem: 'Candidatura cancelada com sucesso!'
+            mensagem: 'Candidatura cancelada com sucesso.'
         })
     } catch (erro) {
         console.error(erro)
-
         return res.status(500).json({
             erro: 'Erro ao cancelar candidatura.'
         })
     }
 }
 
-/* GET /candidaturas/minhas — o freelancer acompanha o que enviou. */
+// GET /candidaturas/minhas
 export const listarMinhasCandidaturas = async (req, res) => {
     try {
         const freelancer = await buscarFreelancer(req.usuario.id)
@@ -247,20 +236,15 @@ export const listarMinhasCandidaturas = async (req, res) => {
             .orderBy('candidatura.cand_id', 'desc')
 
         return res.json({ candidaturas })
-
     } catch (erro) {
         console.error(erro)
-
         return res.status(500).json({
             erro: 'Erro ao listar suas candidaturas.'
         })
     }
 }
 
-/*
- * GET /candidaturas/recebidas — alimenta a tela "Escolher candidatos".
- * So traz candidaturas de projetos do contratante logado.
- */
+// GET /candidaturas/recebidas
 export const listarCandidaturasRecebidas = async (req, res) => {
     try {
         if (req.usuario.tipo !== 'contratante') {
@@ -291,7 +275,6 @@ export const listarCandidaturasRecebidas = async (req, res) => {
                 'servico.serv_valor',
                 'servico.serv_tipo_valor',
                 'freelancer.free_id',
-                /* Perfil publico do candidato: sem CPF, telefone ou e-mail. */
                 'usuario.usu_id',
                 'usuario.usu_nome',
                 'usuario.usu_desc',
@@ -302,17 +285,15 @@ export const listarCandidaturasRecebidas = async (req, res) => {
             .orderBy('candidatura.cand_id', 'desc')
 
         return res.json({ candidatos })
-
     } catch (erro) {
         console.error(erro)
-
         return res.status(500).json({
             erro: 'Erro ao listar candidatos.'
         })
     }
 }
 
-/* PUT /candidaturas/:id — aceitar ou recusar. */
+// PUT /candidaturas/:id — aceitar ou recusar
 export const responderCandidatura = async (req, res) => {
     try {
         const { acao } = req.body
@@ -357,7 +338,6 @@ export const responderCandidatura = async (req, res) => {
             })
         }
 
-        /* Checagem de posse: so o dono do projeto responde. */
         if (candidatura.cont_id !== contratante.cont_id) {
             return res.status(403).json({
                 erro: 'Esta candidatura não é de um projeto seu.'
@@ -378,7 +358,7 @@ export const responderCandidatura = async (req, res) => {
             await notificarFreelancer(
                 candidatura.free_id,
                 'Candidatura não aceita',
-                'Sua candidatura para "' + candidatura.serv_titulo + '" não foi aceita desta vez.'
+                `Sua candidatura para "${candidatura.serv_titulo}" não foi aceita desta vez.`
             )
 
             return res.json({ mensagem: 'Candidatura recusada.' })
@@ -390,11 +370,6 @@ export const responderCandidatura = async (req, res) => {
             })
         }
 
-        /*
-         * Transaction: aceitar envolve tres escritas que precisam valer juntas.
-         * Gravadas pela metade, o projeto ficaria com duas candidaturas aceitas
-         * ou em andamento sem ninguem aceito.
-         */
         await db.transaction(async (trx) => {
             await trx('candidatura')
                 .where('cand_id', candidatura.cand_id)
@@ -414,21 +389,18 @@ export const responderCandidatura = async (req, res) => {
         await notificarFreelancer(
             candidatura.free_id,
             'Você foi escolhido!',
-            'Sua candidatura para "' + candidatura.serv_titulo + '" foi aceita.'
+            `Sua candidatura para "${candidatura.serv_titulo}" foi aceita.`
         )
 
         return res.json({ mensagem: 'Candidatura aceita!' })
-
     } catch (erro) {
         console.error(erro)
-
         return res.status(500).json({
             erro: 'Erro ao responder candidatura.'
         })
     }
 }
 
-/* A notificacao e um extra: falhar aqui nao pode derrubar a acao principal. */
 async function notificarFreelancer(free_id, titulo, descricao) {
     try {
         const freelancer = await db('freelancer')

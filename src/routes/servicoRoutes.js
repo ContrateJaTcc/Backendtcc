@@ -15,6 +15,7 @@ router.get('/meus', auth, servicoController.listarMeusServicos)
 
 router.get('/:id/outros', auth, servicoController.listarOutrosServicos)
 router.post('/:id/candidaturas', auth, candidaturaController.candidatarSe)
+router.delete('/:id/candidaturas',auth,candidaturaController.cancelarCandidatura)
 router.put('/:id/finalizar', auth, finalizarServico)
 router.get('/:id', auth, servicoController.buscarServicoPorId)
 router.put('/:id', auth, servicoController.atualizarServico)

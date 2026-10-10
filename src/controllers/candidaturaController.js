@@ -132,11 +132,25 @@ export const candidatarSe = async (req, res) => {
             .where({ free_id: freelancer.free_id, serv_id: servico.serv_id })
             .first()
 
-        if (jaExiste) {
-            return res.status(409).json({
-                erro: 'Você já se candidatou a este projeto.'
-            })
-        }
+        if (jaExiste && jaExiste.cand_status !== 'cancelada') {
+    return res.status(409).json({
+        erro: 'Você já se candidatou a este projeto.'
+    })
+}
+
+if (jaExiste && jaExiste.cand_status === 'cancelada') {
+    await db('candidatura')
+        .where('cand_id', jaExiste.cand_id)
+        .update({
+            cand_status: 'pendente',
+            cand_data: db.fn.now()
+        })
+
+    return res.status(201).json({
+        mensagem: 'Candidatura enviada novamente!',
+        cand_id: jaExiste.cand_id
+    })
+}
 
         const [cand_id] = await db('candidatura').insert({
             free_id: freelancer.free_id,
@@ -153,6 +167,58 @@ export const candidatarSe = async (req, res) => {
 
         return res.status(500).json({
             erro: 'Erro ao enviar candidatura.'
+        })
+    }
+}
+
+/* DELETE /servicos/:id/candidaturas — freelancer cancela a própria candidatura. */
+export const cancelarCandidatura = async (req, res) => {
+    try {
+        if (req.usuario.tipo !== 'freelancer') {
+            return res.status(403).json({
+                erro: 'Apenas freelancers podem cancelar candidaturas.'
+            })
+        }
+
+        const freelancer = await buscarFreelancer(req.usuario.id)
+
+        if (!freelancer) {
+            return res.status(404).json({
+                erro: 'Freelancer não encontrado.'
+            })
+        }
+
+        const candidatura = await db('candidatura')
+            .where({
+                free_id: freelancer.free_id,
+                serv_id: req.params.id
+            })
+            .first()
+
+        if (!candidatura) {
+            return res.status(404).json({
+                erro: 'Candidatura não encontrada.'
+            })
+        }
+
+        if (candidatura.cand_status !== 'pendente') {
+            return res.status(400).json({
+                erro: 'Só é possível cancelar candidaturas pendentes.'
+            })
+        }
+
+        await db('candidatura')
+            .where('cand_id', candidatura.cand_id)
+            .update({ cand_status: 'cancelada' })
+
+        return res.json({
+            mensagem: 'Candidatura cancelada com sucesso!'
+        })
+    } catch (erro) {
+        console.error(erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao cancelar candidatura.'
         })
     }
 }

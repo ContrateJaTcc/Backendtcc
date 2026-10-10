@@ -11,13 +11,6 @@ export const test = async (req, res) => {
     })
 }
 
-/*
- * Aceita CPF com ou sem mascara: 000.000.000-00 ou 00000000000.
- * Telefone com ou sem mascara, DDD de 2 digitos e numero de 8 ou 9 digitos:
- * (11) 91234-5678, 11912345678, (11) 1234-5678, 1112345678.
- * Depois de validado, o valor e gravado so com os digitos, porque as colunas
- * usu_cpf e usu_tel tem 11 caracteres.
- */
 const REGEX_CPF = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/
 const REGEX_TELEFONE = /^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/
 const REGEX_ESTADO = /^[A-Za-z]{2}$/
@@ -33,8 +26,6 @@ const gerarToken = (usuario) => jwt.sign(
     { expiresIn: '1h' }
 )
 
-// O tipo vem do banco, nao do que o usuario escolheu na tela:
-// sem isso o frontend so tem o botao clicado para decidir a area.
 const respostaLogin = (usuario) => ({
     mensagem: 'Login bem-sucedido! ^w^',
     token: gerarToken(usuario),
@@ -62,12 +53,7 @@ export const register = async (req, res) => {
 
         let { email, senha } = req.body
 
-        /*
-         * Cadastro vindo do "Continuar com Google": o e-mail e o que o Google
-         * confirmou (o do corpo e ignorado) e a conta nao tem senha propria.
-         * Gravamos um hash aleatorio para a coluna NOT NULL; se a pessoa
-         * quiser entrar por e-mail e senha depois, usa "esqueci a senha".
-         */
+    
         if (googleToken) {
             const google = await verificarTokenGoogle(googleToken)
             email = google.email
@@ -256,13 +242,6 @@ export const login = async (req, res) => {
     }
 }
 
-/*
- * "Continuar com Google".
- *
- * E-mail ja cadastrado: entra direto. E-mail novo: o banco exige CPF,
- * telefone etc., que o Google nao fornece, entao devolvemos os dados que
- * temos para o frontend abrir o cadastro ja preenchido.
- */
 export const loginGoogle = async (req, res) => {
     try {
         const google = await verificarTokenGoogle(req.body.accessToken)

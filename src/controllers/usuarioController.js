@@ -212,12 +212,6 @@ export const listarMinhasAreas = async (req, res) => {
     }
 }
 
-/*
- * PUT /usuarios/eu/areas — substitui o conjunto de areas de uma vez.
- *
- * A tela manda a selecao inteira, nao o que mudou: e mais simples de acertar
- * do que calcular adicoes e remocoes dos dois lados.
- */
 export const salvarMinhasAreas = async (req, res) => {
     try {
         /* O formato do corpo e conferido antes de consultar o banco: e mais
@@ -262,6 +256,21 @@ export const salvarMinhasAreas = async (req, res) => {
 
         return res.status(500).json({
             erro: 'Erro ao salvar áreas de atuação'
+        })
+    }
+}
+
+
+export const listarFreelancers = async (req, res) => {
+    try {
+        const freelancers = await usuarioModel.listarFreelancers()
+
+        return res.status(200).json(freelancers)
+    } catch (erro) {
+        console.error('Erro ao listar freelancers:', erro)
+
+        return res.status(500).json({
+            erro: 'Erro ao carregar os freelancers.'
         })
     }
 }

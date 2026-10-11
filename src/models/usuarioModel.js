@@ -109,3 +109,51 @@ export const filtrarTiposExistentes = async (tipos) => {
 
     return linhas.map((l) => l.tipo_id)
 }
+
+
+export const listarFreelancers = async () => {
+    const usuarios = await db('usuario')
+        .join('freelancer', 'usuario.usu_id', 'freelancer.usu_id')
+        .leftJoin(
+            'freelancer_tipo_servico',
+            'freelancer.free_id',
+            'freelancer_tipo_servico.free_id'
+        )
+        .leftJoin(
+            'tipo_servico',
+            'freelancer_tipo_servico.tipo_id',
+            'tipo_servico.tipo_id'
+        )
+        .where('usuario.tipo_usuario', 'freelancer')
+        .where('usuario.status_conta', 'ativa')
+        .select(
+            'usuario.usu_id',
+            'usuario.usu_nome',
+            'usuario.usu_desc',
+            'usuario.usu_cid',
+            'usuario.usu_est',
+            'usuario.usu_foto',
+            'freelancer.free_id'
+        )
+        .select(
+            db.raw(`
+                GROUP_CONCAT(
+                    DISTINCT tipo_servico.tipo_nome
+                    ORDER BY tipo_servico.tipo_nome
+                    SEPARATOR ', '
+                ) AS areas_atuacao
+            `)
+        )
+        .groupBy(
+            'usuario.usu_id',
+            'usuario.usu_nome',
+            'usuario.usu_desc',
+            'usuario.usu_cid',
+            'usuario.usu_est',
+            'usuario.usu_foto',
+            'freelancer.free_id'
+        )
+        .orderBy('usuario.usu_nome', 'asc')
+
+    return usuarios
+}

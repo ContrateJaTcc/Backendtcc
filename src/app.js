@@ -12,6 +12,7 @@ import portfolioRoutes from './routes/portfolioRoutes.js'
 import perfilRoutes from './routes/perfilRoutes.js'
 import avaliacaoRoutes from './routes/avaliacaoRoutes.js'
 import notificacaoRoutes from './routes/notificacaoRoutes.js'
+import insigniasRoutes from './routes/insigniasRoutes.js';
 
 const app = express()
 
@@ -29,5 +30,6 @@ app.use('/portfolio', portfolioRoutes)
 app.use('/perfil', perfilRoutes)
 app.use('/avaliacoes', avaliacaoRoutes)
 app.use('/notificacoes', notificacaoRoutes)
+app.use('/insignias', insigniasRoutes);
 
 export default app

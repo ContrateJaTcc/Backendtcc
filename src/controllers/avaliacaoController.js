@@ -5,6 +5,7 @@ import {
     XP_PROJETO_CONCLUIDO,
     XP_POR_ESTRELA
 } from '../services/gamificacao.js'
+import { verificarInsignia } from '../services/insigniasServices.js'
 
 const LIMITE_COMENTARIO = 1000
 
@@ -24,6 +25,15 @@ async function notificar(usu_id, titulo, descricao) {
  * transaction da mudanca de status: finalizar duas vezes nao pode dar XP
  * duas vezes, e o status so muda se o XP tambem foi gravado.
  */
+
+async function atualizarInsignia(free_id) {
+    try {
+        await verificarInsignia(free_id)
+    } catch (erro) {
+        console.error('Erro ao atualizar insígnia:', erro)
+    }
+}
+
 export const finalizarServico = async (req, res) => {
     try {
         const contratante = await db('contratante')
@@ -73,6 +83,9 @@ export const finalizarServico = async (req, res) => {
 
         if (!finalizou) {
             return res.status(400).json({ erro: 'Este projeto já foi finalizado.' })
+        }
+        for (const f of aceitos) {
+            await atualizarInsignia(f.free_id)
         }
 
         for (const f of aceitos) {
@@ -194,6 +207,7 @@ export const criarAvaliacao = async (req, res) => {
         }
 
         const avaliandoFreelancer = req.usuario.tipo === 'contratante'
+        let free_id_avaliado = null
 
         await db.transaction(async (trx) => {
             await trx('avaliacao').insert({
@@ -204,19 +218,24 @@ export const criarAvaliacao = async (req, res) => {
                 aval_comentario: comentario || null
             })
 
-            /* So o freelancer acumula XP e rank; o contratante tem apenas
-               a media de reputacao, calculada na leitura. */
+
             if (avaliandoFreelancer) {
                 const freelancer = await trx('freelancer')
                     .select('free_id')
                     .where('usu_id', usu_avaliado)
                     .first()
 
+                free_id_avaliado = freelancer.free_id    
+
                 await concederXp(trx, freelancer.free_id, nota * XP_POR_ESTRELA)
                 await recalcularRank(trx, usu_avaliado)
             }
         })
 
+        if (free_id_avaliado) {
+            await atualizarInsignia(free_id_avaliado)
+        }
+        
         await notificar(
             usu_avaliado,
             'Você recebeu uma avaliação',

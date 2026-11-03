@@ -52,9 +52,11 @@ export const perfilFreelancer = async (req, res) => {
     } catch (erro) {
         console.error(erro)
 
-        return res.status(500).json({ erro: 'Erro ao carregar o perfil do freelancer.' })
+        return res.status(500).json({
+            erro: 'Erro ao carregar o perfil do freelancer.',
+            detalhe: erro.message
+        })
     }
-}
 
 /*
  * GET /perfil/contratante/eu

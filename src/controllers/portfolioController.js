@@ -1,25 +1,23 @@
 import db from '../config/knex.js'
+import { vistoDoUsuario } from '../services/presenca.js'
+import { mediasPorCriterio } from '../services/reputacao.js'
+import { lerHorarios } from './relacaoController.js'
+import { verificacao, tempoResposta } from '../services/confianca.js'
+import { aparenciaUm } from '../services/aparencia.js'
+import { temColuna } from '../services/registro.js'
+import { nomeCurto } from './publicoController.js'
+import { avaliacaoVisivel } from '../services/gamificacao.js'
+import { registrarVisita } from '../services/visitas.js'
 
-/*
- * A tabela portfolio ja existia na migration desde o inicio do projeto, mas
- * nenhum codigo a utilizava: nao havia controller, rota nem tela.
- *
- * Assim como em candidatura, portfolio.free_id referencia freelancer.free_id,
- * e NAO usuario.usu_id. O token carrega o usu_id, entao toda rota precisa
- * fazer essa traducao antes de tocar na tabela.
- */
+/* Portfólio */
 const buscarFreelancer = (usu_id) =>
     db('freelancer').select('free_id').where('usu_id', usu_id).first()
 
-/* As colunas port_link e port_img sao varchar(255). */
+/* Limite URL */
 const LIMITE_URL = 255
 const LIMITE_TITULO = 150
 
-/*
- * port_img guarda endereco de imagem, nao arquivo. Aceitamos apenas http e
- * https: um valor como "javascript:..." acabaria dentro de um href no
- * frontend, e nao ha motivo para um portfolio apontar para outro esquema.
- */
+/* Validar URL */
 function validarUrl(valor, campo) {
     if (!valor) return { ok: true, valor: null }
 
@@ -38,7 +36,7 @@ function validarUrl(valor, campo) {
     return { ok: true, valor: limpo }
 }
 
-/* Validacao comum ao criar e ao atualizar. */
+/* Validar item */
 function validarItem(corpo) {
     const titulo = String(corpo.port_titulo ?? '').trim()
     const desc = String(corpo.port_desc ?? '').trim()
@@ -79,7 +77,7 @@ const CAMPOS = [
     'port_data_atualizacao'
 ]
 
-/* GET /portfolio/meu — itens do freelancer logado, para a tela de edicao. */
+/* Meu portfólio */
 export const listarMeuPortfolio = async (req, res) => {
     try {
         const freelancer = await buscarFreelancer(req.usuario.id)
@@ -106,13 +104,7 @@ export const listarMeuPortfolio = async (req, res) => {
     }
 }
 
-/*
- * GET /portfolio/freelancer/:usuId — portfolio de um freelancer, para o
- * contratante avaliar o candidato antes de aceitar.
- *
- * Recebe o usu_id porque e o que a tela de candidatos ja tem em maos.
- * Devolve junto os dados publicos do perfil, evitando uma segunda requisicao.
- */
+/* Portfólio do freelancer */
 export const listarPorFreelancer = async (req, res) => {
     try {
         const perfil = await db('usuario')
@@ -127,6 +119,7 @@ export const listarPorFreelancer = async (req, res) => {
                 'usuario.usu_foto',
                 'freelancer.free_id',
                 'freelancer.free_nivel',
+                'freelancer.free_xp',
                 'freelancer.free_rank'
             )
             .first()
@@ -138,20 +131,31 @@ export const listarPorFreelancer = async (req, res) => {
         }
 
         const itens = await db('portfolio')
-            .select(CAMPOS)
+            .select([...CAMPOS, ...((await temColuna('portfolio', 'port_serv_id')) ? ['port_serv_id'] : [])])
             .where('free_id', perfil.free_id)
             .orderBy('port_id', 'desc')
 
-        /* As areas de atuacao ajudam o contratante a julgar o candidato tanto
-           quanto os trabalhos, entao vao na mesma resposta. */
+        /* Áreas */
         const areas = await db('freelancer_tipo_servico')
             .join('tipo_servico', 'freelancer_tipo_servico.tipo_id', 'tipo_servico.tipo_id')
             .where('freelancer_tipo_servico.free_id', perfil.free_id)
             .select('tipo_servico.tipo_id', 'tipo_servico.tipo_nome')
             .orderBy('tipo_servico.tipo_nome')
 
-        /* So campos publicos: nada de e-mail, CPF ou telefone aqui. */
-        return res.json({ perfil, areas, itens })
+        const [selo, resposta, aparencia, visto, criterios, horarios] = await Promise.all([
+            verificacao(perfil.usu_id),
+            tempoResposta(perfil.usu_id),
+            aparenciaUm(perfil.usu_id),
+            vistoDoUsuario(perfil.usu_id),
+            mediasPorCriterio(perfil.usu_id),
+            (async () => ((await temColuna('usuario', 'usu_horarios')) ? lerHorarios((await db('usuario').where('usu_id', perfil.usu_id).select('usu_horarios').first())?.usu_horarios) : null))()
+        ])
+
+        /* Contratante abrindo o portfólio conta como visita (o próprio freelancer não) */
+        if (req.usuario.tipo === 'contratante') await registrarVisita(perfil.usu_id, { req, visitanteId: req.usuario.id, origem: 'contratante' })
+
+        /* Dados públicos */
+        return res.json({ perfil: { ...perfil, verificado: selo.verificado, tempo_resposta: resposta, visto_em: visto, criterios, horarios, ...aparencia }, areas, itens })
 
     } catch (erro) {
         console.error(erro)
@@ -162,7 +166,7 @@ export const listarPorFreelancer = async (req, res) => {
     }
 }
 
-/* POST /portfolio — adiciona um trabalho ao quadro. */
+/* Criar */
 export const criarItem = async (req, res) => {
     try {
         const freelancer = await buscarFreelancer(req.usuario.id)
@@ -201,11 +205,64 @@ export const criarItem = async (req, res) => {
 }
 
 /*
- * Confere se o item existe e pertence a quem esta pedindo.
- *
- * Sem isso, um freelancer conseguiria editar ou apagar o trabalho de outro
- * so trocando o id na URL.
+ * Projeto concluído vira trabalho do portfólio: já vem com o título, a descrição e a avaliação do cliente.
+ * Dá para mudar o título e a descrição antes de mandar; cada projeto entra uma vez só.
  */
+export const criarDeProjeto = async (req, res) => {
+    try {
+        if (!(await temColuna('portfolio', 'port_serv_id'))) {
+            return res.status(503).json({ erro: 'Isso ainda está sendo preparado. Tente mais tarde.' })
+        }
+
+        const freelancer = await buscarFreelancer(req.usuario.id)
+        if (!freelancer) return res.status(403).json({ erro: 'Apenas freelancers possuem portfólio.' })
+
+        const projeto = await db('servico')
+            .join('candidatura', 'servico.serv_id', 'candidatura.serv_id')
+            .join('contratante', 'servico.cont_id', 'contratante.cont_id')
+            .join('usuario', 'contratante.usu_id', 'usuario.usu_id')
+            .where('servico.serv_id', req.params.servId)
+            .where('candidatura.free_id', freelancer.free_id)
+            .where('candidatura.cand_status', 'aceita')
+            .select('servico.serv_id', 'servico.serv_titulo', 'servico.serv_desc', 'servico.serv_status', 'usuario.usu_id as cliente_id', 'usuario.usu_nome as cliente_nome')
+            .first()
+
+        if (!projeto) return res.status(404).json({ erro: 'Projeto não encontrado entre os seus trabalhos.' })
+        if (projeto.serv_status !== 'finalizado') return res.status(400).json({ erro: 'Só projetos concluídos vão para o portfólio.' })
+        if (await db('portfolio').where({ free_id: freelancer.free_id, port_serv_id: projeto.serv_id }).first()) {
+            return res.status(400).json({ erro: 'Este projeto já está no seu portfólio.' })
+        }
+
+        const avaliacao = await db('avaliacao')
+            .where({ serv_id: projeto.serv_id, usu_avaliado: req.usuario.id, usu_avaliador: projeto.cliente_id })
+            .whereRaw(avaliacaoVisivel())
+            .select('aval_nota', 'aval_comentario')
+            .first()
+
+        const depoimento = avaliacao
+            ? `\n\n★ ${avaliacao.aval_nota}/5${avaliacao.aval_comentario ? ` — "${avaliacao.aval_comentario}"` : ''} (${nomeCurto(projeto.cliente_nome)})`
+            : ''
+
+        const validacao = validarItem({
+            port_titulo: String(req.body.port_titulo ?? '').trim() || projeto.serv_titulo,
+            port_desc: (String(req.body.port_desc ?? '').trim() || projeto.serv_desc) + depoimento,
+            port_link: req.body.port_link,
+            port_img: req.body.port_img
+        })
+
+        if (!validacao.ok) return res.status(400).json({ erro: validacao.erro })
+
+        const [port_id] = await db('portfolio').insert({ free_id: freelancer.free_id, port_serv_id: projeto.serv_id, ...validacao.dados })
+        const item = await db('portfolio').select(CAMPOS).where('port_id', port_id).first()
+
+        return res.status(201).json({ mensagem: 'Projeto adicionado ao portfólio!', item })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao adicionar o projeto ao portfólio.' })
+    }
+}
+
+/* Dono */
 async function buscarItemDoDono(port_id, usu_id) {
     const freelancer = await buscarFreelancer(usu_id)
 
@@ -226,7 +283,7 @@ async function buscarItemDoDono(port_id, usu_id) {
     return { item }
 }
 
-/* PUT /portfolio/:id — edita um trabalho do proprio quadro. */
+/* Editar */
 export const atualizarItem = async (req, res) => {
     try {
         const dono = await buscarItemDoDono(req.params.id, req.usuario.id)
@@ -264,7 +321,7 @@ export const atualizarItem = async (req, res) => {
     }
 }
 
-/* DELETE /portfolio/:id — remove um trabalho do proprio quadro. */
+/* Excluir */
 export const deletarItem = async (req, res) => {
     try {
         const dono = await buscarItemDoDono(req.params.id, req.usuario.id)

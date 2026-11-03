@@ -1,11 +1,4 @@
-/*
- * Valida o access token que o frontend recebeu do Google (Google Identity
- * Services, fluxo "token client").
- *
- * O ponto critico e conferir o "aud": sem isso, um token emitido para
- * QUALQUER outro site que use login do Google seria aceito aqui, e quem
- * tivesse esse token entraria na conta da vitima.
- */
+/* Google */
 const TOKENINFO = 'https://oauth2.googleapis.com/tokeninfo'
 const USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo'
 
@@ -26,7 +19,7 @@ export async function verificarTokenGoogle(accessToken) {
         `${TOKENINFO}?access_token=${encodeURIComponent(accessToken)}`
     )
 
-    // Token expirado, revogado ou inventado: o Google responde 400.
+    // Token inválido
     if (!respostaInfo.ok) {
         throw new ErroGoogle('Token do Google inválido ou expirado.')
     }
@@ -41,8 +34,7 @@ export async function verificarTokenGoogle(accessToken) {
         throw new ErroGoogle('Sua conta Google não tem um e-mail verificado.')
     }
 
-    /* tokeninfo nao traz o nome; o userinfo traz. Se falhar, seguimos so
-       com o e-mail — o nome e apenas para preencher o formulario. */
+    /* Perfil Google */
     let perfil = {}
 
     try {

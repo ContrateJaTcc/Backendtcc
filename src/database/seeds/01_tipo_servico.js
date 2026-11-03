@@ -1,12 +1,4 @@
-/*
- * Sem este seed a tabela tipo_servico nasce vazia e qualquer POST /servicos
- * falha na chave estrangeira — a pasta seeds nem existia, embora o
- * knexfile.js ja apontasse para ela.
- *
- * Os nomes precisam bater com o que o frontend exibe no select. Desde a
- * criacao de GET /tipos-servico o frontend monta as opcoes a partir daqui,
- * entao esta lista e a unica fonte da verdade.
- */
+/* Tipos de serviço */
 const TIPOS = [
     { tipo_nome: 'Desenvolvimento Web', tipo_desc: 'Sites, sistemas web e integrações' },
     { tipo_nome: 'Design', tipo_desc: 'Identidade visual, interfaces e peças gráficas' },
@@ -22,8 +14,7 @@ export async function seed(knex) {
             .where('tipo_nome', tipo.tipo_nome)
             .first()
 
-        // insere sem apagar: um delete() quebraria os servicos ja cadastrados
-        // que apontam para estes ids.
+        // Insere sem apagar
         if (!existente) {
             await knex('tipo_servico').insert(tipo)
         } else {

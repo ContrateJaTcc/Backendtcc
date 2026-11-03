@@ -1,20 +1,5 @@
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
 
-/*
- * Liga as tabelas de gamificacao que ja existiam desde o inicio, mas que
- * nenhum codigo usava (insignia, freelancer_insignia, avaliacao).
- *
- * 1. insignia ganha ins_codigo: as regras de conquista ficam no codigo
- *    (src/services/gamificacao.js) e precisam de um identificador estavel —
- *    o nome e texto de exibicao e pode mudar.
- * 2. O catalogo de insignias e inserido aqui.
- * 3. avaliacao: a chave unica era (serv_id, usu_avaliador), o que impedia o
- *    contratante de avaliar mais de um freelancer no mesmo projeto (vagas > 1).
- *    Passa a ser (serv_id, usu_avaliador, usu_avaliado).
- */
+/* Gamificação */
 const CATALOGO = [
     ['primeiro_projeto', 'Primeiro Projeto', 'Concluiu o primeiro projeto na plataforma.'],
     ['em_ascensao', 'Em Ascensão', 'Concluiu 5 projetos.'],
@@ -43,8 +28,7 @@ export async function up(knex) {
         }
     }
 
-    /* A unica nova e criada antes de remover a antiga: a foreign key de
-       serv_id precisa de algum indice comecando por serv_id o tempo todo. */
+    /* Índice */
     const [indices] = await knex.raw("SHOW INDEX FROM avaliacao WHERE Key_name = 'avaliacao_serv_id_usu_avaliador_usu_avaliado_unique'")
 
     if (indices.length === 0) {
@@ -62,10 +46,7 @@ export async function up(knex) {
     }
 }
 
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
+/* Desfaz */
 export async function down(knex) {
     await knex.schema.alterTable('avaliacao', (table) => {
         table.unique(['serv_id', 'usu_avaliador'])

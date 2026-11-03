@@ -1,17 +1,17 @@
 import db from '../config/knex.js'
+import { temTabela } from './registro.js'
+import { enviarPush } from './push.js'
 
 /*
- * Regras de XP, nivel e insignias do freelancer.
- *
- * XP:
- *   - projeto concluido: +100
- *   - avaliacao recebida: +20 por estrela (5 estrelas = +100)
- *
- * Nivel: o XP necessario cresce a cada nivel (curva quadratica), para que os
- * primeiros niveis venham rapido e os seguintes exijam constancia.
- *   nivel 2 = 50 XP, 3 = 200, 4 = 450, 5 = 800, 6 = 1250 ...
- * Um projeto concluido com nota 5 rende 200 XP.
+ * Avaliação às cegas: a nota só aparece quando os dois lados avaliaram o projeto
+ * ou quando passam 7 dias da avaliação (assim ninguém responde a nota do outro "na vingança").
+ * Uso: .whereRaw(avaliacaoVisivel('a')) com o apelido da tabela avaliacao na consulta.
  */
+export const DIAS_AVALIACAO_CEGA = 7
+export const avaliacaoVisivel = (a = 'avaliacao') =>
+    `(${a}.aval_data <= DATE_SUB(NOW(), INTERVAL ${DIAS_AVALIACAO_CEGA} DAY) OR EXISTS (SELECT 1 FROM avaliacao volta WHERE volta.serv_id = ${a}.serv_id AND volta.usu_avaliador = ${a}.usu_avaliado AND volta.usu_avaliado = ${a}.usu_avaliador))`
+
+/* Gamificação */
 export const XP_PROJETO_CONCLUIDO = 100
 export const XP_POR_ESTRELA = 20
 
@@ -21,25 +21,23 @@ export const xpDoNivel = (nivel) => XP_BASE_NIVEL * (nivel - 1) ** 2
 
 export const nivelPorXp = (xp) => Math.floor(Math.sqrt(Math.max(0, xp) / XP_BASE_NIVEL)) + 1
 
-/*
- * Catalogo de regras. O codigo casa com insignia.ins_codigo (a migration
- * 20261002000000_gamificacao insere as linhas). Cada regra devolve o
- * progresso atual e a meta, para a tela mostrar "3/5" nas bloqueadas.
- */
+/* Regras */
 const REGRAS = {
     primeiro_projeto: (e) => ({ progresso: e.concluidos, meta: 1 }),
     em_ascensao: (e) => ({ progresso: e.concluidos, meta: 5 }),
     veterano: (e) => ({ progresso: e.concluidos, meta: 10 }),
     nota_maxima: (e) => ({ progresso: e.notasCinco, meta: 1 }),
-    /* Exige a media alem da quantidade: com media baixa o progresso trava
-       um passo antes da meta, em vez de parecer concluido. */
+    /* Favorito */
     favorito: (e) => ({
         progresso: e.media >= 4.8 ? e.totalAvaliacoes : Math.min(e.totalAvaliacoes, 4),
         meta: 5
     }),
     vitrine: (e) => ({ progresso: e.itensPortfolio, meta: 3 }),
     perfil_completo: (e) => ({ progresso: e.itensPerfil, meta: 3 }),
-    nivel_5: (e) => ({ progresso: e.nivel, meta: 5 })
+    nivel_5: (e) => ({ progresso: e.nivel, meta: 5 }),
+    primeira_entrega: (e) => ({ progresso: e.entregas, meta: 1 }),
+    requisitado: (e) => ({ progresso: e.convites, meta: 3 }),
+    pontual: (e) => ({ progresso: e.entregasConcluidas, meta: 3 })
 }
 
 async function estatisticasFreelancer(free_id, conexao = db) {
@@ -66,11 +64,25 @@ async function estatisticasFreelancer(free_id, conexao = db) {
 
     const [notas] = await conexao('avaliacao')
         .where('usu_avaliado', freelancer.usu_id)
+        .whereRaw(avaliacaoVisivel())
         .select(
             conexao.raw('COUNT(*) as total'),
             conexao.raw('AVG(aval_nota) as media'),
             conexao.raw('SUM(aval_nota = 5) as cinco')
         )
+
+    /* Entregas */
+    const [entregas] = await conexao('candidatura')
+        .join('servico', 'candidatura.serv_id', 'servico.serv_id')
+        .where('candidatura.free_id', free_id)
+        .where('candidatura.cand_status', 'aceita')
+        .whereNotNull('servico.serv_entregue_em')
+        .select(
+            conexao.raw('COUNT(*) as total'),
+            conexao.raw("SUM(servico.serv_status = 'finalizado') as concluidas")
+        )
+
+    const [{ convites }] = await conexao('convite').where('free_id', free_id).count('* as convites')
 
     const [{ itens }] = await conexao('portfolio').where('free_id', free_id).count('* as itens')
     const [{ areas }] = await conexao('freelancer_tipo_servico').where('free_id', free_id).count('* as areas')
@@ -84,6 +96,9 @@ async function estatisticasFreelancer(free_id, conexao = db) {
         media: notas.media === null ? 0 : Number(notas.media),
         notasCinco: Number(notas.cinco ?? 0),
         itensPortfolio: Number(itens),
+        entregas: Number(entregas.total),
+        entregasConcluidas: Number(entregas.concluidas ?? 0),
+        convites: Number(convites),
         itensPerfil:
             (freelancer.usu_foto ? 1 : 0) +
             (freelancer.usu_desc?.trim() ? 1 : 0) +
@@ -91,14 +106,7 @@ async function estatisticasFreelancer(free_id, conexao = db) {
     }
 }
 
-/*
- * Concede as insignias que o freelancer ja cumpre e ainda nao tem, e devolve
- * o catalogo completo com o estado de cada uma.
- *
- * Roda na leitura do perfil em vez de em cada evento (portfolio, foto, areas,
- * avaliacao...): assim nenhuma acao esquecida deixa de conceder a insignia.
- * Nunca remove — insignia conquistada fica, mesmo que o portfolio diminua.
- */
+/* Sincronizar insígnias */
 export async function sincronizarInsignias(free_id) {
     const estatisticas = await estatisticasFreelancer(free_id)
 
@@ -136,7 +144,7 @@ export async function sincronizarInsignias(free_id) {
     })
 
     if (novas.length > 0) {
-        /* insert ignore: duas abas abertas podem sincronizar ao mesmo tempo. */
+        /* Insert ignore */
         await db('freelancer_insignia')
             .insert(novas.map((ins) => ({ free_id, ins_id: ins.ins_id })))
             .onConflict(['free_id', 'ins_id'])
@@ -149,6 +157,10 @@ export async function sincronizarInsignias(free_id) {
                 not_desc: `Você conquistou a insígnia "${ins.ins_nome}".`
             }))
         ).catch((erro) => console.error(erro))
+
+        for (const ins of novas) {
+            await enviarPush(estatisticas.usu_id, { titulo: 'Nova insígnia desbloqueada!', texto: `Você conquistou a insígnia "${ins.ins_nome}".` })
+        }
     }
 
     return resultado
@@ -172,9 +184,8 @@ export async function resumoFreelancer(free_id) {
     }
 }
 
-/* Soma XP e recalcula o nivel na mesma escrita. Usar dentro da transaction
-   do evento que gerou o XP. */
-export async function concederXp(trx, free_id, quantidade) {
+/* Conceder XP (e anotar no histórico, de onde sai o ranking do mês) */
+export async function concederXp(trx, free_id, quantidade, motivo = 'xp') {
     const freelancer = await trx('freelancer').where('free_id', free_id).select('free_xp').first()
 
     if (!freelancer) return
@@ -184,23 +195,28 @@ export async function concederXp(trx, free_id, quantidade) {
     await trx('freelancer')
         .where('free_id', free_id)
         .update({ free_xp: xp, free_nivel: nivelPorXp(xp) })
+
+    if (await temTabela('xp_evento')) {
+        await trx('xp_evento').insert({ free_id, xpe_xp: quantidade, xpe_motivo: motivo })
+    }
 }
 
-/* free_rank guarda a media das notas recebidas (0.00 a 5.00). */
+/* Rank */
 export async function recalcularRank(trx, usu_id) {
-    const [{ media }] = await trx('avaliacao').where('usu_avaliado', usu_id).avg('aval_nota as media')
+    const [{ media }] = await trx('avaliacao').where('usu_avaliado', usu_id).whereRaw(avaliacaoVisivel()).avg('aval_nota as media')
 
     await trx('freelancer')
         .where('usu_id', usu_id)
         .update({ free_rank: media === null ? 0 : Number(media).toFixed(2) })
 }
 
-/* Ultimas avaliacoes recebidas por um usuario (freelancer ou contratante). */
+/* Avaliações */
 export function listarAvaliacoesRecebidas(usu_id, limite = 10) {
     return db('avaliacao')
         .join('usuario', 'avaliacao.usu_avaliador', 'usuario.usu_id')
         .join('servico', 'avaliacao.serv_id', 'servico.serv_id')
         .where('avaliacao.usu_avaliado', usu_id)
+        .whereRaw(avaliacaoVisivel())
         .select(
             'avaliacao.aval_id',
             'avaliacao.aval_nota',
@@ -217,6 +233,7 @@ export function listarAvaliacoesRecebidas(usu_id, limite = 10) {
 export async function reputacao(usu_id) {
     const [linha] = await db('avaliacao')
         .where('usu_avaliado', usu_id)
+        .whereRaw(avaliacaoVisivel())
         .select(db.raw('COUNT(*) as total'), db.raw('AVG(aval_nota) as media'))
 
     return {

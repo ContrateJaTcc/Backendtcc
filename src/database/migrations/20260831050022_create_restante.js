@@ -1,6 +1,6 @@
 export async function up(knex) {
 
-    // 1. freelancer
+    // Freelancer
     await knex.schema.createTable('freelancer', (table) => {
         table.increments('free_id').primary()
         table.integer('usu_id').unsigned().notNullable().unique()
@@ -17,7 +17,7 @@ export async function up(knex) {
     })
 
 
-    // 2. contratante
+    // Contratante
     await knex.schema.createTable('contratante', (table) => {
         table.increments('cont_id').primary()
         table.integer('usu_id').unsigned().notNullable().unique()
@@ -30,7 +30,7 @@ export async function up(knex) {
     })
 
 
-    // 3. tipo_servico
+    // Tipo de serviço
     await knex.schema.createTable('tipo_servico', (table) => {
         table.increments('tipo_id').primary()
         table.string('tipo_nome', 100).notNullable().unique()
@@ -38,7 +38,7 @@ export async function up(knex) {
     })
 
 
-    // 4. servico
+    // Serviço
     await knex.schema.createTable('servico', (table) => {
         table.increments('serv_id').primary()
 
@@ -81,7 +81,7 @@ export async function up(knex) {
     })
 
 
-    // 5. candidatura
+    // Candidatura
     await knex.schema.createTable('candidatura', (table) => {
         table.increments('cand_id').primary()
 
@@ -115,7 +115,7 @@ export async function up(knex) {
     })
 
 
-    // 6. portfolio
+    // Portfólio
     await knex.schema.createTable('portfolio', (table) => {
         table.increments('port_id').primary()
 
@@ -142,7 +142,7 @@ export async function up(knex) {
     })
 
 
-    // 7. avaliacao
+    // Avaliação
     await knex.schema.createTable('avaliacao', (table) => {
         table.increments('aval_id').primary()
 
@@ -181,7 +181,7 @@ export async function up(knex) {
     })
 
 
-    // 8. insignia
+    // Insígnia
     await knex.schema.createTable('insignia', (table) => {
         table.increments('ins_id').primary()
 
@@ -190,7 +190,7 @@ export async function up(knex) {
     })
 
 
-    // 9. freelancer_insignia
+    // Insígnias do freelancer
     await knex.schema.createTable('freelancer_insignia', (table) => {
         table.integer('free_id').unsigned().notNullable()
         table.integer('ins_id').unsigned().notNullable()
@@ -215,7 +215,7 @@ export async function up(knex) {
     })
 
 
-    // 10. mensagem
+    // Mensagem
     await knex.schema.createTable('mensagem', (table) => {
         table.increments('msg_id').primary()
 
@@ -253,7 +253,7 @@ export async function up(knex) {
     })
 
 
-    // 11. notificacao
+    // Notificação
     await knex.schema.createTable('notificacao', (table) => {
         table.increments('not_id').primary()
 
@@ -278,7 +278,7 @@ export async function up(knex) {
     })
 
 
-    // 12. freelancer_tipo_servico
+    // Áreas do freelancer
     await knex.schema.createTable('freelancer_tipo_servico', (table) => {
         table.integer('free_id').unsigned().notNullable()
         table.integer('tipo_id').unsigned().notNullable()

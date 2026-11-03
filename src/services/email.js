@@ -1,15 +1,6 @@
 import nodemailer from 'nodemailer'
 
-/*
- * Envio de e-mail via SMTP.
- *
- * Com Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=seu@gmail.com
- * e SMTP_PASS = uma "senha de app" (Conta Google > Seguranca > Senhas de app),
- * nao a senha normal da conta.
- *
- * Sem SMTP configurado (ambiente de desenvolvimento), o e-mail nao e enviado:
- * o conteudo vai para o console para que o fluxo possa ser testado.
- */
+/* E-mail */
 const smtpConfigurado = Boolean(
     process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
 )
@@ -25,6 +16,9 @@ const transporte = smtpConfigurado
         }
     })
     : null
+
+/* O supremo só precisa de código no login quando dá para mandar e-mail de verdade */
+export const emailConfigurado = smtpConfigurado
 
 export async function enviarEmail({ para, assunto, texto, html }) {
     if (!transporte) {

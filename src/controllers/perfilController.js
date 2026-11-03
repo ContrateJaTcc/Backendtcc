@@ -15,13 +15,11 @@ async function montarPerfilFreelancer(usu_id) {
 
     if (!freelancer) return null
 
-    /* Insignias primeiro: sincronizar pode conceder novas, e o resumo
-       deve refletir o estado ja atualizado. */
     const insignias = await sincronizarInsignias(freelancer.free_id)
     const resumo = await resumoFreelancer(freelancer.free_id)
     const avaliacoes = await listarAvaliacoesRecebidas(usu_id)
 
-    return { resumo, insignias, avaliacoes }
+    return { free_id: freelancer.free_id, resumo, insignias, avaliacoes }
 }
 
 /* GET /perfil/freelancer/eu */

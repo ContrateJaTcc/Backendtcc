@@ -1,17 +1,5 @@
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
 
-/*
- * Contas antigas criadas pelo POST /usuarios (removido depois) ganharam a linha
- * em "usuario", mas nunca a linha em "freelancer" ou "contratante". Essas
- * contas entram no site mas não conseguem se candidatar, publicar projeto,
- * ter portfólio, XP ou insígnias.
- *
- * Cria a linha que falta conforme o tipo_usuario de cada conta. Só insere,
- * nunca altera nem apaga.
- */
+/* Contas sem papel */
 export async function up(knex) {
     const freelancersSemLinha = await knex('usuario')
         .leftJoin('freelancer', 'usuario.usu_id', 'freelancer.usu_id')
@@ -34,5 +22,5 @@ export async function up(knex) {
     }
 }
 
-/* Não há como saber quais linhas esta migration criou; desfazer não remove nada. */
+/* Desfaz */
 export async function down() {}

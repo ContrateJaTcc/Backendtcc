@@ -3,15 +3,7 @@ import db from '../config/knex.js'
 
 const router = express.Router()
 
-/*
- * Publico de proposito: o select de categorias aparece antes do login no
- * fluxo de cadastro de projeto, e a lista nao tem nada sensivel.
- *
- * Existe para o frontend parar de mapear nome -> id na mao. Aquele mapa
- * quebrava de duas formas: se os ids do banco fossem outros, o insert
- * falhava na FK; e ao editar um projeto, um nome com acento diferente do
- * escrito no mapa dava "Categoria invalida" sem o usuario conseguir salvar.
- */
+/* Tipos de serviço */
 router.get('/', async (req, res) => {
     try {
         const tipos = await db('tipo_servico')

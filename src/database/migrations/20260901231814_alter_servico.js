@@ -1,7 +1,4 @@
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
+/* Altera servico */
 exports.up = async function(knex) {
     const hasTipoValor = await knex.schema.hasColumn('servico', 'serv_tipo_valor')
     const hasLocal = await knex.schema.hasColumn('servico', 'serv_local')
@@ -69,10 +66,7 @@ exports.up = async function(knex) {
     })
 }
 
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
+/* Desfaz */
 exports.down = async function(knex) {
     await knex.schema.alterTable('servico', (table) => {
         table.dropColumn('serv_tipo_valor')

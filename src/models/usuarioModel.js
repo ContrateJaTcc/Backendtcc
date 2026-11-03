@@ -1,15 +1,6 @@
 import db from '../config/knex.js'
 
-/*
- * Duas projecoes de proposito.
- *
- * CAMPOS_PUBLICOS: o que qualquer usuario logado pode ver de outra pessoa.
- * Nao inclui CPF, telefone, e-mail nem data de nascimento — antes a listagem
- * devolvia tudo isso de todo mundo.
- *
- * CAMPOS_PROPRIOS: o perfil completo, so para o dono da conta.
- * Nenhuma das duas inclui usu_senha.
- */
+/* Campos */
 const CAMPOS_PUBLICOS = [
     'usu_id',
     'usu_nome',
@@ -67,13 +58,7 @@ export const deletarUsuario = (id) => {
         .del()
 }
 
-/*
- * Areas de atuacao do freelancer.
- *
- * freelancer_tipo_servico ja existia na migration (free_id + tipo_id, chave
- * primaria composta) e nunca tinha sido usada. Como em portfolio, a tabela
- * referencia freelancer.free_id, nao usuario.usu_id.
- */
+/* Áreas */
 export const buscarFreelancerPorUsuario = (usu_id) => {
     return db('freelancer').select('free_id').where('usu_id', usu_id).first()
 }
@@ -86,11 +71,7 @@ export const listarAreas = (free_id) => {
         .orderBy('tipo_servico.tipo_nome')
 }
 
-/*
- * Substitui o conjunto inteiro de areas numa transaction: apagar e inserir
- * precisam acontecer juntos, senao uma falha no meio deixaria o freelancer
- * sem nenhuma area salva.
- */
+/* Substituir áreas */
 export const substituirAreas = (free_id, tipos) => {
     return db.transaction(async (trx) => {
         await trx('freelancer_tipo_servico').where('free_id', free_id).del()
@@ -103,7 +84,7 @@ export const substituirAreas = (free_id, tipos) => {
     })
 }
 
-/* Confere quais dos ids enviados existem de fato em tipo_servico. */
+/* Tipos existentes */
 export const filtrarTiposExistentes = async (tipos) => {
     const linhas = await db('tipo_servico').select('tipo_id').whereIn('tipo_id', tipos)
 
@@ -133,7 +114,18 @@ export const listarFreelancers = async () => {
             'usuario.usu_cid',
             'usuario.usu_est',
             'usuario.usu_foto',
-            'freelancer.free_id'
+            'freelancer.free_id',
+            'freelancer.free_nivel',
+            'freelancer.free_xp'
+        )
+        .select(
+            /* Insígnias */
+            db.raw(`(
+                SELECT GROUP_CONCAT(i.ins_codigo ORDER BY fi.freeins_data SEPARATOR ',')
+                FROM freelancer_insignia fi
+                JOIN insignia i ON i.ins_id = fi.ins_id
+                WHERE fi.free_id = freelancer.free_id
+            ) AS insignias`)
         )
         .select(
             db.raw(`
@@ -151,7 +143,9 @@ export const listarFreelancers = async () => {
             'usuario.usu_cid',
             'usuario.usu_est',
             'usuario.usu_foto',
-            'freelancer.free_id'
+            'freelancer.free_id',
+            'freelancer.free_nivel',
+            'freelancer.free_xp'
         )
         .orderBy('usuario.usu_nome', 'asc')
 

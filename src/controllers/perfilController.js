@@ -1,4 +1,5 @@
 import db from '../config/knex.js'
+import { verificacao } from '../services/confianca.js'
 import {
     sincronizarInsignias,
     resumoFreelancer,
@@ -6,23 +7,23 @@ import {
     reputacao
 } from '../services/gamificacao.js'
 
-/*
- * Dados de gamificacao e reputacao exibidos nas telas de perfil.
- * Os dados cadastrais continuam em /usuarios/eu.
- */
+/* Perfil freelancer */
 async function montarPerfilFreelancer(usu_id) {
     const freelancer = await db('freelancer').select('free_id').where('usu_id', usu_id).first()
 
     if (!freelancer) return null
 
+    /* Insígnias */
     const insignias = await sincronizarInsignias(freelancer.free_id)
     const resumo = await resumoFreelancer(freelancer.free_id)
     const avaliacoes = await listarAvaliacoesRecebidas(usu_id)
 
-    return { free_id: freelancer.free_id, resumo, insignias, avaliacoes }
+    const selo = await verificacao(usu_id)
+
+    return { free_id: freelancer.free_id, resumo, insignias, avaliacoes, verificacao: selo }
 }
 
-/* GET /perfil/freelancer/eu */
+/* Meu perfil */
 export const meuPerfilFreelancer = async (req, res) => {
     try {
         const perfil = await montarPerfilFreelancer(req.usuario.id)
@@ -39,7 +40,7 @@ export const meuPerfilFreelancer = async (req, res) => {
     }
 }
 
-/* GET /perfil/freelancer/:usuId — a mesma visao, para o contratante avaliar um candidato. */
+/* Perfil freelancer */
 export const perfilFreelancer = async (req, res) => {
     try {
         const perfil = await montarPerfilFreelancer(Number(req.params.usuId))
@@ -57,13 +58,9 @@ export const perfilFreelancer = async (req, res) => {
             detalhe: erro.message
         })
     }
+}
 
-/*
- * GET /perfil/contratante/eu
- *
- * Numeros dos projetos, reputacao (a nota que os freelancers dao a ele) e os
- * freelancers com quem ja trabalhou, para recontratar.
- */
+/* Perfil contratante */
 export const meuPerfilContratante = async (req, res) => {
     try {
         const contratante = await db('contratante')
@@ -94,6 +91,7 @@ export const meuPerfilContratante = async (req, res) => {
                 'usuario.usu_nome',
                 'usuario.usu_foto',
                 'freelancer.free_nivel',
+                'freelancer.free_xp',
                 'freelancer.free_rank'
             )
             .select(
@@ -101,6 +99,7 @@ export const meuPerfilContratante = async (req, res) => {
                 'usuario.usu_nome',
                 'usuario.usu_foto',
                 'freelancer.free_nivel',
+                'freelancer.free_xp',
                 'freelancer.free_rank',
                 db.raw('COUNT(*) as projetos'),
                 db.raw('MAX(servico.serv_id) as ultimo_serv_id')
@@ -130,6 +129,7 @@ export const meuPerfilContratante = async (req, res) => {
                 usu_nome: c.usu_nome,
                 usu_foto: c.usu_foto,
                 free_nivel: c.free_nivel,
+                free_xp: c.free_xp,
                 free_rank: Number(c.free_rank),
                 projetos: Number(c.projetos)
             }))

@@ -1,8 +1,4 @@
-/**
- * Cria a tabela de usuários.
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
+/* Cria usuario */
 export async function up(knex) {
     await knex.schema.createTable('usuario', (table) => {
         table.increments('usu_id').primary()
@@ -49,11 +45,7 @@ export async function up(knex) {
     })
 }
 
-/**
- * Remove a tabela de usuários.
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
+/* Remove usuario */
 export async function down(knex) {
     await knex.schema.dropTableIfExists('usuario')
 }

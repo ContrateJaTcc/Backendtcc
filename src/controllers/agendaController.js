@@ -21,9 +21,14 @@ function projetosDaPessoa(usuario) {
         .where('candidatura.cand_status', 'aceita')
 }
 
-/* Data de entrega: contratação + dias combinados (os dias de pausa já entram em serv_qtd_dias ao retomar) */
-export const prazoDoProjeto = (s) =>
-    s.serv_contratado_em && s.serv_qtd_dias ? new Date(new Date(s.serv_contratado_em).getTime() + s.serv_qtd_dias * DIA) : null
+/*
+ * Data de entrega: contratação + dias combinados (os dias de pausa já entram em serv_qtd_dias ao retomar).
+ * Projetos contratados antes de existir serv_contratado_em usam o início combinado ou a última atualização.
+ */
+export const prazoDoProjeto = (s) => {
+    const inicio = s.serv_contratado_em ?? s.serv_data_inicio ?? s.serv_data_atualizacao ?? s.serv_data_criacao
+    return inicio && s.serv_qtd_dias ? new Date(new Date(inicio).getTime() + s.serv_qtd_dias * DIA) : null
+}
 
 export const agenda = async (req, res) => {
     try {
@@ -32,10 +37,15 @@ export const agenda = async (req, res) => {
         const comPausa = await temColuna('servico', 'serv_pausado_em')
         const comContratacao = await temColuna('servico', 'serv_contratado_em')
 
-        if (comContratacao) {
+        {
             const andamento = await projetosDaPessoa(req.usuario)
                 .where('servico.serv_status', 'em_andamento')
-                .select('servico.serv_id', 'servico.serv_titulo', 'servico.serv_contratado_em', 'servico.serv_qtd_dias', 'servico.serv_entregue_em', ...(comPausa ? ['servico.serv_pausado_em'] : []))
+                .select(
+                    'servico.serv_id', 'servico.serv_titulo', 'servico.serv_qtd_dias',
+                    'servico.serv_data_inicio', 'servico.serv_data_criacao', 'servico.serv_data_atualizacao',
+                    ...(comContratacao ? ['servico.serv_contratado_em', 'servico.serv_entregue_em'] : []),
+                    ...(comPausa ? ['servico.serv_pausado_em'] : [])
+                )
 
             for (const s of andamento) {
                 const prazo = prazoDoProjeto(s)

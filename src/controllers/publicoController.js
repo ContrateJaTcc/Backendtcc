@@ -22,9 +22,12 @@ export function nomeCurto(nome) {
     return `${partes[0]} ${partes[partes.length - 1][0].toUpperCase()}.`
 }
 
+/* Contas de teste ("TESTE O.", "Teste admin") ficam fora de tudo o que é público */
+const semContaDeTeste = (coluna) => [`LOWER(TRIM(${coluna})) NOT LIKE 'teste%'`]
+
 /*
  * Depoimentos da home: avaliações de verdade, deixadas ao final de projetos concluídos,
- * com nota 4 ou 5 e comentário de pelo menos 20 letras. Também devolve a média geral do site.
+ * com nota 4 ou 5 e comentário de pelo menos 40 letras. Também devolve a média geral do site.
  */
 export const depoimentos = async (req, res) => {
     try {
@@ -39,9 +42,11 @@ export const depoimentos = async (req, res) => {
                 .whereNotNull('a.aval_comentario')
                 .whereRaw(avaliacaoVisivel('a'))
                 .where('a.aval_nota', '>=', 4)
-                .whereRaw('CHAR_LENGTH(a.aval_comentario) >= 20')
+                .whereRaw('CHAR_LENGTH(a.aval_comentario) >= 40')
                 .where('autor.status_conta', 'ativa')
                 .where('alvo.status_conta', 'ativa')
+                .whereRaw(...semContaDeTeste('autor.usu_nome'))
+                .whereRaw(...semContaDeTeste('alvo.usu_nome'))
                 .orderBy('a.aval_data', 'desc')
                 .limit(8)
                 .select(
@@ -296,6 +301,7 @@ export const mural = async (req, res) => {
                 .join('tipo_servico', 'teste_habilidade.tipo_id', 'tipo_servico.tipo_id')
                 .where('teste_habilidade.tes_aprovado_em', '>=', desde)
                 .where('usuario.status_conta', 'ativa')
+                .whereRaw(...semContaDeTeste('usuario.usu_nome'))
                 .select('usuario.usu_nome', ...(comBusca ? ['usuario.usu_aparecer_busca'] : []), 'tipo_servico.tipo_nome', 'teste_habilidade.tes_aprovado_em')
                 .orderBy('teste_habilidade.tes_aprovado_em', 'desc')
                 .limit(10)
@@ -308,6 +314,7 @@ export const mural = async (req, res) => {
             .join('insignia', 'freelancer_insignia.ins_id', 'insignia.ins_id')
             .where('freelancer_insignia.freeins_data', '>=', desde)
             .where('usuario.status_conta', 'ativa')
+            .whereRaw(...semContaDeTeste('usuario.usu_nome'))
             .select('usuario.usu_nome', ...(comBusca ? ['usuario.usu_aparecer_busca'] : []), 'insignia.ins_nome', 'freelancer_insignia.freeins_data')
             .orderBy('freelancer_insignia.freeins_data', 'desc')
             .limit(10)

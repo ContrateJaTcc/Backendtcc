@@ -41,5 +41,8 @@ router.delete('/usuarios/:id', exigirSupremo, supremoController.excluirUsuario)
 router.post('/avisos', exigirSupremo, supremoController.enviarAviso)
 router.put('/cenario', exigirSupremo, supremoController.salvarCenario)
 router.get('/registro', exigirSupremo, supremoController.listarRegistro)
+/* Migrations do banco pelo servidor (sem precisar da senha do banco) */
+router.get('/migracoes', exigirSupremo, supremoController.verMigracoes)
+router.post('/migracoes', exigirSupremo, supremoController.rodarMigracoes)
 
 export default router

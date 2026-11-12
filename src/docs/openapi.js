@@ -4551,6 +4551,57 @@ export default {
                 }
             }
         },
+        "/admin/migracoes": {
+            "get": {
+                "tags": [
+                    "/admin"
+                ],
+                "summary": "Ver migracoes",
+                "description": "Migrations do banco pelo servidor (sem precisar da senha do banco). Papel: administrador ou supremo.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "/admin"
+                ],
+                "summary": "Rodar migracoes",
+                "description": "Migrations do banco pelo servidor (sem precisar da senha do banco). Papel: administrador ou supremo.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
         "/config/cenario": {
             "get": {
                 "tags": [

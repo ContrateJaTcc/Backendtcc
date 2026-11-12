@@ -207,3 +207,12 @@ describe('filtro de spam', async () => {
         assert.deepEqual(m.motivosDeSpam({ titulo: 'Criptografia de arquivos', descricao: 'Script em Python', valor: 300, tipo_valor: 'fixo' }), [])
     })
 })
+
+describe('migrations', () => {
+    test('toda migration da pasta está na lista usada pelo servidor', async () => {
+        const { MIGRACOES } = await import('../src/database/migracoes.js')
+        const pasta = fs.readdirSync(new URL('../src/database/migrations/', import.meta.url)).filter((f) => f.endsWith('.js')).sort()
+        assert.deepEqual(Object.keys(MIGRACOES).sort(), pasta)
+        for (const nome of pasta) assert.equal(typeof MIGRACOES[nome].up, 'function', nome)
+    })
+})

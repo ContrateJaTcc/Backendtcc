@@ -1,5 +1,5 @@
 /* Altera servico */
-exports.up = async function(knex) {
+export async function up(knex) {
     const hasTipoValor = await knex.schema.hasColumn('servico', 'serv_tipo_valor')
     const hasLocal = await knex.schema.hasColumn('servico', 'serv_local')
     const hasCidade = await knex.schema.hasColumn('servico', 'serv_cidade')
@@ -67,7 +67,7 @@ exports.up = async function(knex) {
 }
 
 /* Desfaz */
-exports.down = async function(knex) {
+export async function down(knex) {
     await knex.schema.alterTable('servico', (table) => {
         table.dropColumn('serv_tipo_valor')
         table.dropColumn('serv_local')

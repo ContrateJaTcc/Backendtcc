@@ -47,3 +47,19 @@ export const fonteMigracoes = {
     getMigrationName: (nome) => nome,
     getMigration: async (nome) => MIGRACOES[nome]
 }
+
+/* Aplica / lista as migrations pelo servidor (rota do supremo e tarefa /tarefas/migrar) */
+export async function aplicarMigracoes() {
+    const { default: db } = await import('../config/knex.js')
+    const [lote, aplicadas] = await db.migrate.latest({ migrationSource: fonteMigracoes })
+    return { lote, aplicadas }
+}
+
+export async function listarMigracoes() {
+    const { default: db } = await import('../config/knex.js')
+    const [feitas, pendentes] = await db.migrate.list({ migrationSource: fonteMigracoes })
+    return {
+        feitas: feitas.map((m) => m.name ?? m),
+        pendentes: pendentes.map((m) => m.file ?? m.name ?? m)
+    }
+}

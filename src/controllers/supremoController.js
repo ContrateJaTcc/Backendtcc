@@ -249,18 +249,10 @@ export const salvarCenario = async (req, res) => {
  * Migrations pelo próprio servidor: roda com os dados do banco que já estão na Vercel,
  * sem ninguém precisar da senha do banco. GET mostra o que falta; POST aplica.
  */
-const opcoesMigracao = async () => {
-    const { fonteMigracoes } = await import('../database/migracoes.js')
-    return { migrationSource: fonteMigracoes }
-}
-
 export const verMigracoes = async (req, res) => {
     try {
-        const [feitas, pendentes] = await db.migrate.list(await opcoesMigracao())
-        return res.json({
-            feitas: feitas.map((m) => m.name ?? m),
-            pendentes: pendentes.map((m) => m.file ?? m.name ?? m)
-        })
+        const { listarMigracoes } = await import('../database/migracoes.js')
+        return res.json(await listarMigracoes())
     } catch (erro) {
         console.error(erro)
         return res.status(500).json({ erro: 'Não foi possível ler as migrations.', detalhe: String(erro?.message ?? erro).slice(0, 300) })
@@ -269,7 +261,8 @@ export const verMigracoes = async (req, res) => {
 
 export const rodarMigracoes = async (req, res) => {
     try {
-        const [lote, aplicadas] = await db.migrate.latest(await opcoesMigracao())
+        const { aplicarMigracoes } = await import('../database/migracoes.js')
+        const { lote, aplicadas } = await aplicarMigracoes()
         await registrarAcao(req, 'rodar_migracoes', { detalhe: aplicadas.length ? `lote ${lote}: ${aplicadas.join(', ')}` : 'nada pendente' })
         return res.json({ lote, aplicadas, mensagem: aplicadas.length ? `${aplicadas.length} migration(s) aplicada(s).` : 'O banco já estava em dia.' })
     } catch (erro) {

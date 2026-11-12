@@ -5425,6 +5425,20 @@ export default {
                 }
             }
         },
+        "/tarefas/migrar": {
+            "get": {
+                "tags": [
+                    "/tarefas"
+                ],
+                "summary": "Tarefalistar migracoes",
+                "description": "Migrations do banco com a mesma chave (para quando ninguém tem a senha do banco nem do supremo).",
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    }
+                }
+            }
+        },
         "/guildas": {
             "get": {
                 "tags": [

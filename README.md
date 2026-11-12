@@ -4,35 +4,48 @@ SOBRE O PROJETO:
  API desenvolvida para o Trabalho de Conclusão de Curso, responsável pelo gerenciamento de autenticação e comunicação com o banco de dados da plataforma Contrate Já.
 A plataforma tem como objetivo conectar contratantes e trabalhadores autônomos utilizando elementos de gamificação, como níveis, experiência e insígnias.
 
-TECNOLOGIAS UTILIZADAS?
-- Node.js
-- Express
-- MySQL
-- JWT
-- bcrypt
-- dotenv
+TECNOLOGIAS UTILIZADAS:
+- Node.js + Express
+- MySQL (Knex para consultas e migrações)
+- JWT e bcrypt (login e senhas)
+- Nodemailer (e-mails), web-push (avisos no celular)
+- Vercel (hospedagem e tarefas agendadas)
 
-FUNCIONALIDADES IMPLEMENTADAS:
+FUNCIONALIDADES:
 
-- Conexão com banco MySQL
-- Cadastro de usuários
-- Criptografia de senha
-- Login
-- Geração de Token JWT
-- Middleware de autenticação
-- Rota protegida
+- Cadastro, login (senha ou Google), confirmação de e-mail e "esqueci minha senha"
+- Perfis de contratante e freelancer, portfólio e avaliações
+- Serviços, candidaturas, contratações, orçamentos e etapas
+- Mensagens, notificações e avisos push
+- Gamificação: níveis, XP, insígnias, conquistas, missões semanais, ranking, loja e guildas
+- Painel de administração e moderação (denúncias, banimentos, registro de ações)
+- Documentação da API em /docs
+
+COMO RODAR:
+
+1. npm install
+2. Copiar .env.example para .env.local e preencher
+3. npm run testar-banco   (confere a conexão com o MySQL)
+4. npm run migrate
+5. npm run dev
+Testes (sem banco): npm test
 
 ESTRUTURA DO PROJETO:
 
+server.js            inicia o servidor
 src
- ├── controllers
- ├── database
- ├── middleware
- ├── models
- └── routes
-
-teste
-teste2
+ ├── app.js          monta o Express e as rotas
+ ├── config          conexão com o banco e conta do supremo
+ ├── controllers     lógica de cada rota
+ ├── dados           dados fixos (cidades)
+ ├── database        migrações e seeds
+ ├── docs            documentação OpenAPI
+ ├── middleware      autenticação, papéis e segurança
+ ├── models          consultas de usuário
+ ├── routes          definição das rotas
+ └── services        e-mail, push, gamificação, agendador etc.
+scripts              criar admin/supremo, trocar senha, gerar docs
+test                 testes automatizados
 
 ADMINISTRADOR SUPREMO:
 

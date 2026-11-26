@@ -4,6 +4,7 @@ import { concederXp, avaliacaoVisivel } from '../services/gamificacao.js'
 import { enviarPush } from '../services/push.js'
 import { liberarConquista } from './conquistaController.js'
 import { nomeCurto } from './publicoController.js'
+import { ehDuplicado } from '../database/dialeto.js'
 
 /* Jogo coletivo: chefão do mês, desafio da semana, árvore de habilidades e missões da guilda */
 
@@ -114,7 +115,7 @@ export const resgatarChefao = async (req, res) => {
         await liberarConquista(req.usuario.id, 'dragao')
         return res.json({ mensagem: `${e.nome} derrotado! +${XP_CHEFAO} XP e a conquista "Caçador de dragões".`, xp: XP_CHEFAO })
     } catch (erro) {
-        if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já pegou o prêmio deste mês.' })
+        if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já pegou o prêmio deste mês.' })
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao pegar o prêmio.' })
     }
@@ -170,7 +171,7 @@ async function premiarSemana(semana) {
     try {
         await db('desafio_premio').insert({ des_semana: semana, usu_id: dono?.usu_id ?? null })
     } catch (erro) {
-        if (erro?.code === 'ER_DUP_ENTRY') return
+        if (ehDuplicado(erro)) return
         throw erro
     }
     if (!dono) return
@@ -217,7 +218,7 @@ export const enviarDesafio = async (req, res) => {
         try {
             await db('desafio_envio').insert({ des_semana: chaveSemana(), usu_id: req.usuario.id, env_titulo: titulo, env_link: link, env_desc: desc })
         } catch (erro) {
-            if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já mandou um trabalho nesta semana.' })
+            if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já mandou um trabalho nesta semana.' })
             throw erro
         }
         return res.status(201).json({ mensagem: 'Trabalho enviado! Agora é torcer pelos votos.' })

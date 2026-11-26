@@ -1,3 +1,5 @@
+import { ehMysql, trocarEnum } from '../enum.js'
+
 /* Altera servico */
 export async function up(knex) {
     const hasTipoValor = await knex.schema.hasColumn('servico', 'serv_tipo_valor')
@@ -52,18 +54,17 @@ export async function up(knex) {
                 .after('serv_habilidades')
         }
 
-        table
-            .enu('serv_status', [
-                'rascunho',
-                'aberto',
-                'em_andamento',
-                'finalizado',
-                'cancelado'
-            ])
-            .notNullable()
-            .defaultTo('rascunho')
-            .alter()
     })
+
+    /* Status com "rascunho" (no PostgreSQL o enum é uma regra CHECK: troca a regra) */
+    const STATUS = ['rascunho', 'aberto', 'em_andamento', 'finalizado', 'cancelado']
+    if (ehMysql(knex)) {
+        await knex.schema.alterTable('servico', (table) => {
+            table.enu('serv_status', STATUS).notNullable().defaultTo('rascunho').alter()
+        })
+    } else {
+        await trocarEnum(knex, 'servico', 'serv_status', STATUS, { padrao: 'rascunho' })
+    }
 }
 
 /* Desfaz */
@@ -76,15 +77,14 @@ export async function down(knex) {
         table.dropColumn('serv_habilidades')
         table.dropColumn('serv_forma_pagamento')
 
-        table
-            .enu('serv_status', [
-                'aberto',
-                'em_andamento',
-                'finalizado',
-                'cancelado'
-            ])
-            .notNullable()
-            .defaultTo('aberto')
-            .alter()
     })
+
+    const STATUS = ['aberto', 'em_andamento', 'finalizado', 'cancelado']
+    if (ehMysql(knex)) {
+        await knex.schema.alterTable('servico', (table) => {
+            table.enu('serv_status', STATUS).notNullable().defaultTo('aberto').alter()
+        })
+    } else {
+        await trocarEnum(knex, 'servico', 'serv_status', STATUS, { padrao: 'aberto' })
+    }
 }

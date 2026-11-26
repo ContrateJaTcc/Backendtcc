@@ -175,7 +175,7 @@ export async function up(knex) {
             .onDelete('CASCADE')
             .onUpdate('CASCADE')
 
-        table.check('`aval_nota` BETWEEN 1 AND 5')
+        table.check('?? BETWEEN 1 AND 5', ['aval_nota'])
 
         table.unique(['serv_id', 'usu_avaliador'])
     })

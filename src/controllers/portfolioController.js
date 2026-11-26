@@ -8,6 +8,7 @@ import { temColuna } from '../services/registro.js'
 import { nomeCurto } from './publicoController.js'
 import { avaliacaoVisivel } from '../services/gamificacao.js'
 import { registrarVisita } from '../services/visitas.js'
+import { inserirComId } from '../database/dialeto.js'
 
 /* Portfólio */
 const buscarFreelancer = (usu_id) =>
@@ -183,10 +184,10 @@ export const criarItem = async (req, res) => {
             return res.status(400).json({ erro: validacao.erro })
         }
 
-        const [port_id] = await db('portfolio').insert({
+        const port_id = await inserirComId(db('portfolio'), {
             free_id: freelancer.free_id,
             ...validacao.dados
-        })
+        }, 'port_id')
 
         const item = await db('portfolio').select(CAMPOS).where('port_id', port_id).first()
 
@@ -252,7 +253,7 @@ export const criarDeProjeto = async (req, res) => {
 
         if (!validacao.ok) return res.status(400).json({ erro: validacao.erro })
 
-        const [port_id] = await db('portfolio').insert({ free_id: freelancer.free_id, port_serv_id: projeto.serv_id, ...validacao.dados })
+        const port_id = await inserirComId(db('portfolio'), { free_id: freelancer.free_id, port_serv_id: projeto.serv_id, ...validacao.dados }, 'port_id')
         const item = await db('portfolio').select(CAMPOS).where('port_id', port_id).first()
 
         return res.status(201).json({ mensagem: 'Projeto adicionado ao portfólio!', item })

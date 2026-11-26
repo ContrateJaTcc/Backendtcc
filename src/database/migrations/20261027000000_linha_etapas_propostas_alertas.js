@@ -46,7 +46,7 @@ export async function up(knex) {
     /* PDF na conversa (data URI), com o nome do arquivo */
     if (!(await knex.schema.hasColumn('mensagem', 'msg_arquivo'))) {
         await knex.schema.alterTable('mensagem', (table) => {
-            table.specificType('msg_arquivo', 'MEDIUMTEXT').nullable()
+            table.text('msg_arquivo', 'mediumtext').nullable()
             table.string('msg_arquivo_nome', 120).nullable()
         })
     }

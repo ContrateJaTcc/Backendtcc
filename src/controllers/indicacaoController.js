@@ -3,6 +3,7 @@ import db from '../config/knex.js'
 import { temColuna } from '../services/registro.js'
 import { concederXp } from '../services/gamificacao.js'
 import { enviarPush } from '../services/push.js'
+import { ehDuplicado } from '../database/dialeto.js'
 
 /*
  * Convide um amigo: cada conta tem um código (ex.: ANA-7K2Q). Quem se cadastra pelo link fica ligado a quem indicou;
@@ -30,7 +31,7 @@ async function codigoDe(usu_id) {
             await db('usuario').where('usu_id', usu_id).update({ usu_indicacao_codigo: codigo })
             return codigo
         } catch (erro) {
-            if (erro.code !== 'ER_DUP_ENTRY') throw erro
+            if (!ehDuplicado(erro)) throw erro
         }
     }
     throw new Error('Não deu para gerar o código de convite.')

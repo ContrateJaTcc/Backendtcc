@@ -2,6 +2,7 @@ import db from '../config/knex.js'
 import { temTabela } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
 import { bloqueados } from '../services/bloqueio.js'
+import { inserirComId } from '../database/dialeto.js'
 
 /*
  * Pedido de orçamento rápido: o contratante manda a mesma pergunta para até 3 freelancers
@@ -25,7 +26,7 @@ export const criarPedido = async (req, res) => {
 
         const tipo_id = Number(req.body?.tipo_id) || null
         const orc_id = await db.transaction(async (trx) => {
-            const [id] = await trx('orcamento_pedido').insert({ usu_id: req.usuario.id, orc_pergunta: pergunta, tipo_id })
+            const id = await inserirComId(trx('orcamento_pedido'), { usu_id: req.usuario.id, orc_pergunta: pergunta, tipo_id }, 'orc_id')
             await trx('orcamento_resposta').insert(ids.map((usu_id) => ({ orc_id: id, usu_id })))
             return id
         })

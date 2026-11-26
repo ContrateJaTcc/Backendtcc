@@ -2,6 +2,7 @@ import db from '../config/knex.js'
 import { temColuna, temTabela } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
 import { inicioDoMes } from '../services/aparencia.js'
+import { ehDuplicado, inserirComId } from '../database/dialeto.js'
 
 /*
  * Guildas: grupos de até 6 freelancers com nome, lema e brasão. Cada pessoa fica em uma guilda só.
@@ -132,14 +133,14 @@ export const criar = async (req, res) => {
         if (repetida) return res.status(409).json({ erro: 'Já existe uma guilda com esse nome.' })
 
         const gui_id = await db.transaction(async (trx) => {
-            const [id] = await trx('guilda').insert({ ...lido.campos, gui_dono: req.usuario.id })
+            const id = await inserirComId(trx('guilda'), { ...lido.campos, gui_dono: req.usuario.id }, 'gui_id')
             await trx('guilda_membro').insert({ gui_id: id, usu_id: req.usuario.id, gme_papel: 'lider' })
             return id
         })
 
         return res.status(201).json({ mensagem: `A guilda ${lido.campos.gui_nome} foi fundada! Chame outros freelancers para entrar.`, gui_id })
     } catch (erro) {
-        if (erro?.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Já existe uma guilda com esse nome (ou você já está numa).' })
+        if (ehDuplicado(erro)) return res.status(409).json({ erro: 'Já existe uma guilda com esse nome (ou você já está numa).' })
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao fundar a guilda.' })
     }
@@ -186,7 +187,7 @@ export const entrar = async (req, res) => {
 
         return res.json({ mensagem: `Bem-vindo à ${g.gui_nome}!` })
     } catch (erro) {
-        if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já está numa guilda.' })
+        if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já está numa guilda.' })
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao entrar na guilda.' })
     }

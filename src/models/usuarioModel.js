@@ -1,4 +1,5 @@
 import db from '../config/knex.js'
+import { sqlJuntar } from '../database/dialeto.js'
 
 /* Campos */
 const CAMPOS_PUBLICOS = [
@@ -42,7 +43,7 @@ export const buscarPerfilCompleto = (id) => {
 
 export const buscarUsuarioPorEmail = (email) => {
     return db('usuario')
-        .where('usu_email', email)
+        .where('usu_email', String(email ?? '').trim().toLowerCase())
         .first()
 }
 
@@ -121,7 +122,7 @@ export const listarFreelancers = async () => {
         .select(
             /* Insígnias */
             db.raw(`(
-                SELECT GROUP_CONCAT(i.ins_codigo ORDER BY fi.freeins_data SEPARATOR ',')
+                SELECT ${sqlJuntar('i.ins_codigo', { ordem: 'fi.freeins_data' })}
                 FROM freelancer_insignia fi
                 JOIN insignia i ON i.ins_id = fi.ins_id
                 WHERE fi.free_id = freelancer.free_id
@@ -129,11 +130,7 @@ export const listarFreelancers = async () => {
         )
         .select(
             db.raw(`
-                GROUP_CONCAT(
-                    DISTINCT tipo_servico.tipo_nome
-                    ORDER BY tipo_servico.tipo_nome
-                    SEPARATOR ', '
-                ) AS areas_atuacao
+                ${sqlJuntar('tipo_servico.tipo_nome', { separador: ', ', distintos: true })} AS areas_atuacao
             `)
         )
         .groupBy(

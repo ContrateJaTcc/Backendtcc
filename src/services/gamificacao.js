@@ -1,6 +1,7 @@
 import db from '../config/knex.js'
 import { temTabela } from './registro.js'
 import { enviarPush } from './push.js'
+import { sqlDiasAtras } from '../database/dialeto.js'
 
 /*
  * Avaliação às cegas: a nota só aparece quando os dois lados avaliaram o projeto
@@ -9,7 +10,7 @@ import { enviarPush } from './push.js'
  */
 export const DIAS_AVALIACAO_CEGA = 7
 export const avaliacaoVisivel = (a = 'avaliacao') =>
-    `(${a}.aval_data <= DATE_SUB(NOW(), INTERVAL ${DIAS_AVALIACAO_CEGA} DAY) OR EXISTS (SELECT 1 FROM avaliacao volta WHERE volta.serv_id = ${a}.serv_id AND volta.usu_avaliador = ${a}.usu_avaliado AND volta.usu_avaliado = ${a}.usu_avaliador))`
+    `(${a}.aval_data <= ${sqlDiasAtras(DIAS_AVALIACAO_CEGA)} OR EXISTS (SELECT 1 FROM avaliacao volta WHERE volta.serv_id = ${a}.serv_id AND volta.usu_avaliador = ${a}.usu_avaliado AND volta.usu_avaliado = ${a}.usu_avaliador))`
 
 /* Gamificação */
 export const XP_PROJETO_CONCLUIDO = 100
@@ -68,7 +69,7 @@ async function estatisticasFreelancer(free_id, conexao = db) {
         .select(
             conexao.raw('COUNT(*) as total'),
             conexao.raw('AVG(aval_nota) as media'),
-            conexao.raw('SUM(aval_nota = 5) as cinco')
+            conexao.raw('SUM(CASE WHEN aval_nota = 5 THEN 1 ELSE 0 END) as cinco')
         )
 
     /* Entregas */
@@ -79,7 +80,7 @@ async function estatisticasFreelancer(free_id, conexao = db) {
         .whereNotNull('servico.serv_entregue_em')
         .select(
             conexao.raw('COUNT(*) as total'),
-            conexao.raw("SUM(servico.serv_status = 'finalizado') as concluidas")
+            conexao.raw("SUM(CASE WHEN servico.serv_status = 'finalizado' THEN 1 ELSE 0 END) as concluidas")
         )
 
     const [{ convites }] = await conexao('convite').where('free_id', free_id).count('* as convites')

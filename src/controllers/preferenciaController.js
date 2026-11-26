@@ -1,6 +1,7 @@
 import db from '../config/knex.js'
 import { temColuna, temTabela } from '../services/registro.js'
 import { CANAIS, CATEGORIAS, lerPreferencia, limparPreferencia } from '../services/avisos.js'
+import { inserirComId } from '../database/dialeto.js'
 
 /* Configurações guardadas na conta: avisos por tipo, privacidade e cartas de candidatura salvas */
 
@@ -87,7 +88,7 @@ export const criarModelo = async (req, res) => {
         if (dados.erro) return res.status(400).json({ erro: dados.erro })
         const [{ total }] = await db('modelo_recado').where('usu_id', req.usuario.id).count('* as total')
         if (Number(total) >= MAX_MODELOS) return res.status(400).json({ erro: `Dá para guardar até ${MAX_MODELOS} cartas. Apague uma para criar outra.` })
-        const [mod_id] = await db('modelo_recado').insert({ ...dados, usu_id: req.usuario.id })
+        const mod_id = await inserirComId(db('modelo_recado'), { ...dados, usu_id: req.usuario.id }, 'mod_id')
         return res.status(201).json({ mensagem: 'Carta guardada.', modelo: { mod_id, ...dados } })
     } catch (erro) {
         console.error(erro)

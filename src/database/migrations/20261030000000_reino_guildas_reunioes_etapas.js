@@ -1,11 +1,11 @@
+import { trocarEnum } from '../enum.js'
+
 /*
  * Rodada do reino: pagamento por etapa, bônus, reuniões e alerta de contato no chat,
  * freelancers favoritos, testes de habilidade, guildas, mascote e visitas ao perfil.
  */
 const TIPOS_MOV_ANTES = ['credito', 'garantia', 'recebido', 'estorno']
 const TIPOS_MOV = [...TIPOS_MOV_ANTES, 'etapa', 'bonus']
-
-const enumSql = (tipos) => `ENUM(${tipos.map((t) => `'${t}'`).join(',')})`
 
 export async function up(knex) {
     /* Etapa paga: parte da garantia liberada quando o contratante aprova a etapa */
@@ -25,9 +25,9 @@ export async function up(knex) {
         })
     }
 
-    /* Movimentos novos na carteira (o enum do MySQL precisa ser trocado inteiro) */
-    if ((await knex.schema.hasTable('carteira_mov')) && knex.client.config.client?.includes('mysql')) {
-        await knex.raw(`ALTER TABLE carteira_mov MODIFY mov_tipo ${enumSql(TIPOS_MOV)} NOT NULL`)
+    /* Movimentos novos na carteira (o enum precisa ser trocado inteiro: MySQL e PostgreSQL) */
+    if (await knex.schema.hasTable('carteira_mov')) {
+        await trocarEnum(knex, 'carteira_mov', 'mov_tipo', TIPOS_MOV)
     }
 
     /* Reunião marcada pelo chat e mensagem com contato de fora */
@@ -143,8 +143,8 @@ export async function down(knex) {
         }
     }
 
-    if ((await knex.schema.hasTable('carteira_mov')) && knex.client.config.client?.includes('mysql')) {
+    if (await knex.schema.hasTable('carteira_mov')) {
         await knex('carteira_mov').whereIn('mov_tipo', ['etapa', 'bonus']).update({ mov_tipo: 'recebido' })
-        await knex.raw(`ALTER TABLE carteira_mov MODIFY mov_tipo ${enumSql(TIPOS_MOV_ANTES)} NOT NULL`)
+        await trocarEnum(knex, 'carteira_mov', 'mov_tipo', TIPOS_MOV_ANTES)
     }
 }

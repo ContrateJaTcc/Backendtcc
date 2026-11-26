@@ -12,6 +12,7 @@ import {
 import { verificarInsignia } from '../services/insigniasServices.js'
 import { enviarPush } from '../services/push.js'
 import { liberarGarantia } from '../services/carteira.js'
+import { ehDuplicado } from '../database/dialeto.js'
 
 /* Comentário curto */
 export const LIMITE_COMENTARIO = 280
@@ -368,7 +369,7 @@ export const criarAvaliacao = async (req, res) => {
         })
 
     } catch (erro) {
-        if (erro.code === 'ER_DUP_ENTRY') {
+        if (ehDuplicado(erro)) {
             return res.status(409).json({ erro: 'Você já avaliou esta pessoa neste projeto.' })
         }
 

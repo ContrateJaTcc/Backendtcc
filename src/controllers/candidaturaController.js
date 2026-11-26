@@ -4,6 +4,7 @@ import db from '../config/knex.js'
 import { temColuna } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
 import { minhaGuilda } from './guildaController.js'
+import { inserirComId, sqlHoje } from '../database/dialeto.js'
 
 const buscarFreelancer = (usu_id) =>
     db('freelancer').select('free_id').where('usu_id', usu_id).first()
@@ -75,13 +76,13 @@ export const listarServicosAbertos = async (req, res) => {
             .modify(await filtroLiberados())
             /* Inscrições encerradas saem da lista */
             .modify((q) => {
-                if (comPrazo) q.where((s) => s.whereNull('servico.serv_candidaturas_ate').orWhere('servico.serv_candidaturas_ate', '>=', db.raw('CURDATE()')))
+                if (comPrazo) q.where((s) => s.whereNull('servico.serv_candidaturas_ate').orWhere('servico.serv_candidaturas_ate', '>=', db.raw(sqlHoje())))
             })
             .modify((q) => {
                 if (busca) {
                     q.where((sub) => {
-                        sub.where('servico.serv_titulo', 'like', `%${busca}%`)
-                            .orWhere('servico.serv_desc', 'like', `%${busca}%`)
+                        sub.whereILike('servico.serv_titulo', `%${busca}%`)
+                            .orWhereILike('servico.serv_desc', `%${busca}%`)
                     })
                 }
 
@@ -213,11 +214,11 @@ export const candidatarSe = async (req, res) => {
             })
         }
 
-        const [cand_id] = await db('candidatura').insert({
+        const cand_id = await inserirComId(db('candidatura'), {
             free_id: freelancer.free_id,
             serv_id: servico.serv_id,
             ...proposta.campos
-        })
+        }, 'cand_id')
 
         return res.status(201).json({
             mensagem: 'Candidatura enviada!',

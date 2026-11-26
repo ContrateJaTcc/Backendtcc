@@ -1,3 +1,5 @@
+import { temIndice } from '../enum.js'
+
 
 /* Gamificação */
 const CATALOGO = [
@@ -29,17 +31,13 @@ export async function up(knex) {
     }
 
     /* Índice */
-    const [indices] = await knex.raw("SHOW INDEX FROM avaliacao WHERE Key_name = 'avaliacao_serv_id_usu_avaliador_usu_avaliado_unique'")
-
-    if (indices.length === 0) {
+    if (!(await temIndice(knex, 'avaliacao', 'avaliacao_serv_id_usu_avaliador_usu_avaliado_unique'))) {
         await knex.schema.alterTable('avaliacao', (table) => {
             table.unique(['serv_id', 'usu_avaliador', 'usu_avaliado'])
         })
     }
 
-    const [antigos] = await knex.raw("SHOW INDEX FROM avaliacao WHERE Key_name = 'avaliacao_serv_id_usu_avaliador_unique'")
-
-    if (antigos.length > 0) {
+    if (await temIndice(knex, 'avaliacao', 'avaliacao_serv_id_usu_avaliador_unique')) {
         await knex.schema.alterTable('avaliacao', (table) => {
             table.dropUnique(['serv_id', 'usu_avaliador'])
         })

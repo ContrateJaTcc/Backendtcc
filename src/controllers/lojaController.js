@@ -4,6 +4,7 @@ import { LOJA, COLUNA_EQUIPADO, campeoesDoMesPassado } from '../services/aparenc
 import { eventoAtual, EVENTOS } from '../services/eventos.js'
 import { concederXp } from '../services/gamificacao.js'
 import { enviarPush } from '../services/push.js'
+import { ehDuplicado } from '../database/dialeto.js'
 
 /*
  * Loja de cosméticos (freelancer gasta XP em molduras, cores de nome e cenários) e
@@ -60,7 +61,7 @@ export const comprar = async (req, res) => {
 
         return res.json({ mensagem: `${item.nome} é seu! Já está equipado.`, ...(await situacaoLoja(req.usuario.id)) })
     } catch (erro) {
-        if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já tem este item.' })
+        if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já tem este item.' })
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao comprar o item.' })
     }

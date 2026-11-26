@@ -5,6 +5,7 @@ import { avisarBuscas } from './buscaController.js'
 import { temColuna, temTabela } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
 import { categoriaInvalida } from './categoriaController.js'
+import { inserirComId, sqlHoje } from '../database/dialeto.js'
 
 /* Prazo para candidaturas (opcional): data de hoje em diante, ou vazio */
 function lerPrazoCandidaturas(valor) {
@@ -322,7 +323,7 @@ export const criarServico = async (req, res) => {
         /* Filtro de spam: projeto suspeito vai para a revisão da administração antes de aparecer */
         const moderacao = await camposModeracao({ titulo, descricao, valor, tipo_valor })
 
-        const [serv_id] = await db('servico').insert({
+        const serv_id = await inserirComId(db('servico'), {
             ...extrasPrazo,
             ...moderacao,
             cont_id: contratante.cont_id,
@@ -340,7 +341,7 @@ export const criarServico = async (req, res) => {
             serv_forma_pagamento: forma_pagamento || null,
             serv_vagas: vagas,
             serv_status: status || 'rascunho'
-        })
+        }, 'serv_id')
 
         const projeto = await db('servico')
             .where('serv_id', serv_id)
@@ -736,7 +737,7 @@ export const listarParecidos = async (req, res) => {
             .modify(await filtroLiberados())
             .where('usuario.status_conta', 'ativa')
             .modify((q) => {
-                if (comPrazo) q.where((s) => s.whereNull('servico.serv_candidaturas_ate').orWhere('servico.serv_candidaturas_ate', '>=', db.raw('CURDATE()')))
+                if (comPrazo) q.where((s) => s.whereNull('servico.serv_candidaturas_ate').orWhere('servico.serv_candidaturas_ate', '>=', db.raw(sqlHoje())))
             })
             .select(
                 'servico.serv_id',

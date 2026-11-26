@@ -8,6 +8,7 @@ import { EMAIL_SUPREMO, ehSupremo } from '../config/supremo.js'
 import { temTabela, temColuna } from '../services/registro.js'
 import { quemIndicou } from './indicacaoController.js'
 import { conferirLocal, emailValido, erroCpf, erroNascimento, erroNome, erroSenha, erroTelefone } from '../services/validacao.js'
+import { ehDuplicado, inserirComId } from '../database/dialeto.js'
 
 export const test = async (req, res) => {
     res.json({
@@ -184,7 +185,7 @@ export const register = async (req, res) => {
 
         await db.transaction(async (trx) => {
 
-            const [usu_id] = await trx('usuario').insert({
+            const usu_id = await inserirComId(trx('usuario'), {
                 usu_nome: String(nome).trim().replace(/\s+/g, ' '),
                 usu_email: email,
                 usu_senha: senhaCriptografada,
@@ -196,7 +197,7 @@ export const register = async (req, res) => {
                 tipo_usuario: tipo,
                 ...(indicadoPor ? { usu_indicado_por: indicadoPor } : {}),
                 ...(confirmar ? { usu_email_confirmado: false } : {})
-            })
+            }, 'usu_id')
 
             if (tipo === 'contratante') {
                 await trx('contratante').insert({
@@ -235,7 +236,7 @@ export const register = async (req, res) => {
         console.error(erro)
 
         /* Duplicado */
-        if (erro.code === 'ER_DUP_ENTRY') {
+        if (ehDuplicado(erro)) {
             return res.status(409).json({
                 erro: 'E-mail ou CPF já cadastrado O.o'
             })
@@ -249,7 +250,7 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
     try {
-        const email = String(req.body.email ?? '').trim()
+        const email = String(req.body.email ?? '').trim().toLowerCase()
         const { senha } = req.body
         const lembrar = Boolean(req.body.lembrar)
 
@@ -584,7 +585,7 @@ export const esqueciSenha = async (req, res) => {
     }
 
     try {
-        const email = String(req.body.email || '').trim()
+        const email = String(req.body.email || '').trim().toLowerCase()
 
         if (!email) {
             return res.status(400).json({ erro: 'Informe o e-mail.' })

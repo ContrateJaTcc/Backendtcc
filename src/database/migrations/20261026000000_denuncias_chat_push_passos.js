@@ -23,7 +23,7 @@ export async function up(knex) {
     /* Imagem na mensagem (data URI comprimida no navegador) */
     if (!(await knex.schema.hasColumn('mensagem', 'msg_imagem'))) {
         await knex.schema.alterTable('mensagem', (table) => {
-            table.specificType('msg_imagem', 'MEDIUMTEXT').nullable()
+            table.text('msg_imagem', 'mediumtext').nullable()
         })
     }
 

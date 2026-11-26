@@ -1,5 +1,6 @@
 import db from '../config/knex.js'
 import { temColuna, temTabela } from '../services/registro.js'
+import { sqlMes } from '../database/dialeto.js'
 
 /*
  * Agenda do mês, Retrospectiva do ano e Marcos comemorativos.
@@ -152,8 +153,8 @@ export const retrospectiva = async (req, res) => {
         const porMes = await db('mensagem')
             .where('usu_remetente', req.usuario.id)
             .whereBetween('msg_data', [inicio, fim])
-            .select(db.raw('MONTH(msg_data) as mes'), db.raw('COUNT(*) as total'))
-            .groupByRaw('MONTH(msg_data)')
+            .select(db.raw(`${sqlMes('msg_data')} as mes`), db.raw('COUNT(*) as total'))
+            .groupByRaw(sqlMes('msg_data'))
         const mensagens = porMes.reduce((s, m) => s + Number(m.total), 0)
         const mesForte = porMes.sort((a, b) => Number(b.total) - Number(a.total))[0]
 

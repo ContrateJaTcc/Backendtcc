@@ -3,6 +3,7 @@ import { temColuna, temTabela } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
 import { projetoDe } from './pausaController.js'
 import { camposModeracao } from '../services/moderacao.js'
+import { inserirComId } from '../database/dialeto.js'
 
 /*
  * Durante o trabalho: horas registradas (projetos por hora), critérios de aceite, versões da entrega,
@@ -241,12 +242,12 @@ const CAMPOS_COPIA = ['cont_id', 'tipo_id', 'serv_titulo', 'serv_desc', 'serv_va
 /* Copia o projeto como aberto e convida o mesmo freelancer; devolve o id novo */
 export async function repetirProjeto(original) {
     const copia = Object.fromEntries(CAMPOS_COPIA.map((c) => [c, original[c]]))
-    const [serv_id] = await db('servico').insert({
+    const serv_id = await inserirComId(db('servico'), {
         ...copia,
         serv_status: 'aberto',
         serv_repetido_de: original.serv_id,
         ...(await camposModeracao({ titulo: original.serv_titulo, descricao: original.serv_desc, valor: original.serv_valor, tipo_valor: original.serv_tipo_valor }))
-    })
+    }, 'serv_id')
     const contratado = await db('candidatura').where({ serv_id: original.serv_id, cand_status: 'aceita' }).select('free_id').first()
     if (contratado) {
         await db('convite').insert({ serv_id, free_id: contratado.free_id, conv_mensagem: 'Projeto do mês: quer fazer de novo?' })
@@ -326,7 +327,7 @@ export const pedirAmostra = async (req, res) => {
         const aberta = await db('servico').where({ cont_id: contratante.cont_id, serv_amostra_de: free_usu }).whereIn('serv_status', ['aberto', 'em_andamento']).first()
         if (aberta) return res.status(400).json({ erro: `Já existe uma amostra com ${freelancer.usu_nome.split(' ')[0]} em andamento.` })
 
-        const [serv_id] = await db('servico').insert({
+        const serv_id = await inserirComId(db('servico'), {
             cont_id: contratante.cont_id,
             tipo_id: tipo.tipo_id,
             serv_titulo: `Amostra: ${titulo}`.slice(0, 150),
@@ -338,7 +339,7 @@ export const pedirAmostra = async (req, res) => {
             serv_vagas: 1,
             serv_status: 'aberto',
             serv_amostra_de: free_usu
-        })
+        }, 'serv_id')
         await db('convite').insert({ serv_id, free_id: freelancer.free_id, conv_mensagem: 'Trabalho de amostra antes de um projeto maior.' })
         await notificar(free_usu, 'Convite para um trabalho de amostra', `Um contratante quer testar seu trabalho antes de um projeto maior: "${titulo}" (até R$ ${valor}).`, '/freelancer')
         return res.status(201).json({ mensagem: `Amostra criada e ${freelancer.usu_nome.split(' ')[0]} foi convidado.`, serv_id })

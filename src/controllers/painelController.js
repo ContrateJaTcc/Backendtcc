@@ -2,6 +2,7 @@ import db from '../config/knex.js'
 import { temColuna, temTabela } from '../services/registro.js'
 import { emailConfigurado } from '../services/email.js'
 import { pushConfigurado } from '../services/push.js'
+import { linhasDoRaw } from '../database/dialeto.js'
 
 /* Painel admin (funil e saúde do servidor) e os números públicos do Modo TV */
 
@@ -70,8 +71,8 @@ export const saude = async (req, res) => {
 
     let migracoes = null
     try {
-        const [concluidas] = await db.raw('SELECT COUNT(*) AS total FROM knex_migrations')
-        migracoes = Number(concluidas?.[0]?.total ?? concluidas?.total ?? 0) || null
+        const [concluidas] = linhasDoRaw(await db.raw('SELECT COUNT(*) AS total FROM knex_migrations'))
+        migracoes = Number(concluidas?.total ?? 0) || null
     } catch {
         migracoes = null
     }

@@ -2,6 +2,7 @@ import db from '../config/knex.js'
 import { concederXp, nivelPorXp } from '../services/gamificacao.js'
 import { temTabela } from '../services/registro.js'
 import { aparenciaDe, campeoesDoMesPassado, inicioDoMes as inicioDoMesDesloc } from '../services/aparencia.js'
+import { ehDuplicado } from '../database/dialeto.js'
 
 /*
  * Missões da semana do freelancer: metas pequenas que renovam toda segunda-feira (horário de Brasília)
@@ -199,7 +200,7 @@ export const resgatarMissao = async (req, res) => {
 
     } catch (erro) {
         /* Dois cliques ao mesmo tempo: o segundo bate na chave única */
-        if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já resgatou esta missão nesta semana.' })
+        if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já resgatou esta missão nesta semana.' })
 
         console.error(erro)
 

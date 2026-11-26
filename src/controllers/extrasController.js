@@ -2,6 +2,7 @@ import db from '../config/knex.js'
 import { concederXp } from '../services/gamificacao.js'
 import { chavePublicaPush, enviarPush } from '../services/push.js'
 import { registrarAcao, temTabela } from '../services/registro.js'
+import { ehDuplicado } from '../database/dialeto.js'
 
 /* ---------- Notificações no celular ---------- */
 
@@ -76,7 +77,7 @@ export const denunciar = async (req, res) => {
         try {
             await db('denuncia').insert({ usu_id: req.usuario.id, den_alvo_tipo: alvo_tipo, den_alvo_id: alvo_id, den_motivo: motivo, den_detalhe: detalhe })
         } catch (erro) {
-            if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já denunciou isso. A administração vai analisar.' })
+            if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já denunciou isso. A administração vai analisar.' })
             throw erro
         }
 
@@ -241,7 +242,7 @@ export const resgatarPasso = async (req, res) => {
         return res.json({ mensagem: `Passo concluído! +${XP_PASSO} XP`, xp: XP_PASSO })
 
     } catch (erro) {
-        if (erro?.code === 'ER_DUP_ENTRY') return res.status(400).json({ erro: 'Você já ganhou o XP deste passo.' })
+        if (ehDuplicado(erro)) return res.status(400).json({ erro: 'Você já ganhou o XP deste passo.' })
 
         console.error(erro)
 

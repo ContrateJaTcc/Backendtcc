@@ -10,6 +10,7 @@ import { temContatoExterno } from '../services/contatoExterno.js'
 import { colunasPresenca, vistoDe, vistoDoUsuario } from '../services/presenca.js'
 import { bloqueados, ERRO_BLOQUEIO } from '../services/bloqueio.js'
 import { dentroDoHorario, lerHorarios } from './relacaoController.js'
+import { inserirComId } from '../database/dialeto.js'
 
 /* Imagem no chat: data URI já comprimida no navegador (até ~200 KB) */
 const LIMITE_IMAGEM = 200_000
@@ -291,7 +292,7 @@ export const enviarMensagem = async (req, res) => {
         /* Telefone, e-mail ou "me chama no zap" antes da contratação: vai, mas com aviso para quem recebe */
         const alerta = temContatoExterno(texto) && (await temColuna('mensagem', 'msg_alerta_contato')) && !(await jaContratado(serv_id, Number(req.usuario.id), Number(destinatario_id)))
 
-        const [msg_id] = await db('mensagem').insert({
+        const msg_id = await inserirComId(db('mensagem'), {
             serv_id,
             usu_remetente: req.usuario.id,
             usu_destinatario: destinatario_id,
@@ -300,7 +301,7 @@ export const enviarMensagem = async (req, res) => {
             ...(arquivo ? { msg_arquivo: arquivo, msg_arquivo_nome: nomeArquivo } : {}),
             ...(alerta ? { msg_alerta_contato: true } : {}),
             ...(resposta ? { msg_resposta_id: resposta } : {})
-        })
+        }, 'msg_id')
 
         /* Coruja noturna: mensagem entre meia-noite e 5h, no horário de Brasília */
         const hora = Number(new Intl.DateTimeFormat('pt-BR', { hour: 'numeric', hourCycle: 'h23', timeZone: 'America/Sao_Paulo' }).format(new Date()))
@@ -662,7 +663,7 @@ export const enviarProposta = async (req, res) => {
             .update({ msg_proposta_status: 'recusada' })
 
         const partes = [valor !== null ? `${reais(valor)}${ctx.s.serv_tipo_valor === 'hora' ? '/hora' : ''}` : null, prazo !== null ? `${prazo} ${prazo === 1 ? 'dia' : 'dias'}` : null].filter(Boolean)
-        const [msg_id] = await db('mensagem').insert({
+        const msg_id = await inserirComId(db('mensagem'), {
             serv_id,
             usu_remetente: req.usuario.id,
             usu_destinatario: destino,
@@ -670,7 +671,7 @@ export const enviarProposta = async (req, res) => {
             msg_proposta_valor: valor,
             msg_proposta_prazo: prazo,
             msg_proposta_status: 'pendente'
-        })
+        }, 'msg_id')
 
         avisar(req.usuario.id, destino)
         const eu = await db('usuario').where('usu_id', req.usuario.id).select('usu_nome').first()
@@ -786,7 +787,7 @@ export const marcarReuniao = async (req, res) => {
         }
 
         const quandoLegivel = quandoTexto(quando)
-        const [msg_id] = await db('mensagem').insert({
+        const msg_id = await inserirComId(db('mensagem'), {
             serv_id,
             usu_remetente: req.usuario.id,
             usu_destinatario: destino,
@@ -794,7 +795,7 @@ export const marcarReuniao = async (req, res) => {
             msg_reuniao_em: quando,
             msg_reuniao_link: link || null,
             msg_reuniao_status: 'pendente'
-        })
+        }, 'msg_id')
 
         avisar(req.usuario.id, destino)
         const eu = await db('usuario').where('usu_id', req.usuario.id).select('usu_nome').first()

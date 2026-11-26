@@ -1,3 +1,5 @@
+import { trocarEnum } from '../enum.js'
+
 /*
  * Rodada das 30 sugestões: e-mail confirmado, horas trabalhadas, avaliação por critério, bloqueio, resposta citando,
  * projeto recorrente, aviso de disponibilidade, chefão do mês, histórico do anúncio, denúncia de mensagem,
@@ -157,8 +159,8 @@ export async function up(knex) {
         if (!(await knex.schema.hasTable(tabela))) await knex.schema.createTable(tabela, (t) => criar(t, knex))
     }
     /* Denúncia de uma mensagem do chat (o alvo é o msg_id) */
-    if ((await knex.schema.hasTable('denuncia')) && String(knex.client.config.client ?? '').includes('mysql')) {
-        await knex.raw("ALTER TABLE denuncia MODIFY den_alvo_tipo ENUM('servico','usuario','mensagem') NOT NULL")
+    if (await knex.schema.hasTable('denuncia')) {
+        await trocarEnum(knex, 'denuncia', 'den_alvo_tipo', ['servico', 'usuario', 'mensagem'])
     }
 }
 
@@ -169,8 +171,8 @@ export async function down(knex) {
             if (await knex.schema.hasColumn(tabela, coluna)) await knex.schema.alterTable(tabela, (t) => t.dropColumn(coluna))
         }
     }
-    if ((await knex.schema.hasTable('denuncia')) && String(knex.client.config.client ?? '').includes('mysql')) {
-        await knex.raw("DELETE FROM denuncia WHERE den_alvo_tipo = 'mensagem'")
-        await knex.raw("ALTER TABLE denuncia MODIFY den_alvo_tipo ENUM('servico','usuario') NOT NULL")
+    if (await knex.schema.hasTable('denuncia')) {
+        await knex('denuncia').where('den_alvo_tipo', 'mensagem').del()
+        await trocarEnum(knex, 'denuncia', 'den_alvo_tipo', ['servico', 'usuario'])
     }
 }

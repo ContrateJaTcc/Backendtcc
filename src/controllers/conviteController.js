@@ -2,6 +2,7 @@ import { bloqueados } from '../services/bloqueio.js'
 import db from '../config/knex.js'
 import { LIMITE_COMENTARIO } from './avaliacaoController.js'
 import { enviarPush } from '../services/push.js'
+import { inserirComId } from '../database/dialeto.js'
 
 /* Notificação */
 async function notificar(usu_id, titulo, descricao) {
@@ -77,11 +78,11 @@ export const criarConvite = async (req, res) => {
             return res.status(409).json({ erro: 'Você já convidou este freelancer para este projeto.' })
         }
 
-        const [conv_id] = await db('convite').insert({
+        const conv_id = await inserirComId(db('convite'), {
             serv_id,
             free_id: freelancer.free_id,
             conv_mensagem: mensagem || null
-        })
+        }, 'conv_id')
 
         await notificar(
             usu_id,

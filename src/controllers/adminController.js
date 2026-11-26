@@ -51,8 +51,8 @@ export const listarUsuarios = async (req, res) => {
             .modify((q) => {
                 if (busca) {
                     q.where((sub) => {
-                        sub.where('usu_nome', 'like', `%${busca}%`)
-                            .orWhere('usu_email', 'like', `%${busca}%`)
+                        sub.whereILike('usu_nome', `%${busca}%`)
+                            .orWhereILike('usu_email', `%${busca}%`)
                     })
                 }
 
@@ -137,7 +137,7 @@ export const listarServicos = async (req, res) => {
             .join('contratante', 'servico.cont_id', 'contratante.cont_id')
             .join('usuario', 'contratante.usu_id', 'usuario.usu_id')
             .modify((q) => {
-                if (busca) q.where('servico.serv_titulo', 'like', `%${busca}%`)
+                if (busca) q.whereILike('servico.serv_titulo', `%${busca}%`)
                 if (req.query.status) q.where('servico.serv_status', req.query.status)
             })
             .select(

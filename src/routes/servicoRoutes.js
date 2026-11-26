@@ -71,8 +71,11 @@ router.post('/:id/etapas', auth, contratante, etapaController.criarEtapa)
 router.delete('/:id/etapas/:etaId', auth, contratante, etapaController.removerEtapa)
 router.put('/:id/etapas/:etaId', auth, freelancer, etapaController.concluirEtapa)
 router.post('/:id/etapas/:etaId/aprovar', auth, contratante, etapaController.aprovarEtapa)
+/* O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu) */
+router.put('/:id/cancelar', auth, contratante, servicoController.cancelarMeuServico)
 router.get('/:id', auth, servicoController.buscarServicoPorId)
 router.put('/:id', auth, contratante, servicoController.atualizarServico)
+router.delete('/:id', auth, contratante, servicoController.excluirServico)
 router.post('/', auth, contratante, limiteProjeto, servicoController.criarServico)
 
 export default router

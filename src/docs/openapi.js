@@ -20,6 +20,10 @@ export default {
             "description": "Projetos, candidaturas, entrega, acordo, garantia, etapas, bônus e recibo"
         },
         {
+            "name": "/tipos-servico",
+            "description": "Categorias de projeto"
+        },
+        {
             "name": "/candidaturas",
             "description": "Candidaturas dos freelancers"
         },
@@ -46,6 +50,10 @@ export default {
         {
             "name": "/notificacoes",
             "description": "Sino de notificações"
+        },
+        {
+            "name": "/insignias",
+            "description": ""
         },
         {
             "name": "/convites",
@@ -114,6 +122,10 @@ export default {
         {
             "name": "/testes",
             "description": "Testes de habilidade"
+        },
+        {
+            "name": "/docs",
+            "description": "Esta documentação"
         },
         {
             "name": "/comunidade",
@@ -451,6 +463,28 @@ export default {
                     },
                     "400": {
                         "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            }
+        },
+        "/auth/perfil": {
+            "get": {
+                "tags": [
+                    "/auth"
+                ],
+                "summary": "Confirmar o e-mail do cadastro (código de 6 números)",
+                "description": "Confirmar o e-mail do cadastro (código de 6 números).",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
                     },
                     "401": {
                         "description": "Sem login ou sessão encerrada"
@@ -2855,13 +2889,51 @@ export default {
                 }
             }
         },
+        "/servicos/{id}/cancelar": {
+            "put": {
+                "tags": [
+                    "/servicos"
+                ],
+                "summary": "Cancelar meu servico",
+                "description": "O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu). Papel: contratante.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
         "/servicos/{id}": {
             "get": {
                 "tags": [
                     "/servicos"
                 ],
                 "summary": "Buscar servico por id",
-                "description": "Etapas: o contratante cria e remove, o freelancer contratado marca como feita.",
+                "description": "O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu).",
                 "parameters": [
                     {
                         "name": "id",
@@ -2891,7 +2963,43 @@ export default {
                     "/servicos"
                 ],
                 "summary": "Atualizar servico",
-                "description": "Etapas: o contratante cria e remove, o freelancer contratado marca como feita. Papel: contratante.",
+                "description": "O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu). Papel: contratante.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/servicos"
+                ],
+                "summary": "Excluir servico",
+                "description": "O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu). Papel: contratante.",
                 "parameters": [
                     {
                         "name": "id",
@@ -2929,7 +3037,7 @@ export default {
                     "/servicos"
                 ],
                 "summary": "Criar servico",
-                "description": "Etapas: o contratante cria e remove, o freelancer contratado marca como feita. Papel: contratante.",
+                "description": "O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu). Papel: contratante.",
                 "security": [
                     {
                         "token": []
@@ -2947,6 +3055,20 @@ export default {
                     },
                     "403": {
                         "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
+        "/tipos-servico": {
+            "get": {
+                "tags": [
+                    "/tipos-servico"
+                ],
+                "summary": "Tipos de serviço",
+                "description": "Tipos de serviço.",
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
                     }
                 }
             }
@@ -3732,6 +3854,29 @@ export default {
                     },
                     "401": {
                         "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            }
+        },
+        "/insignias/{free_id}": {
+            "get": {
+                "tags": [
+                    "/insignias"
+                ],
+                "summary": "Consultar insignia",
+                "parameters": [
+                    {
+                        "name": "free_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
                     }
                 }
             }
@@ -4811,6 +4956,20 @@ export default {
                 }
             }
         },
+        "/publico/numeros": {
+            "get": {
+                "tags": [
+                    "/publico"
+                ],
+                "summary": "Numeros",
+                "description": "Modo TV: números da plataforma (o navegador guarda por 1 minuto).",
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    }
+                }
+            }
+        },
         "/publico/erros": {
             "post": {
                 "tags": [
@@ -5437,6 +5596,21 @@ export default {
                         "description": "Deu certo (JSON)"
                     }
                 }
+            },
+            "post": {
+                "tags": [
+                    "/tarefas"
+                ],
+                "summary": "Migrations do banco com a mesma chave (para quando ninguém tem a senha do banco nem do supremo)",
+                "description": "Migrations do banco com a mesma chave (para quando ninguém tem a senha do banco nem do supremo).",
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    }
+                }
             }
         },
         "/guildas": {
@@ -5732,6 +5906,33 @@ export default {
                     },
                     "403": {
                         "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
+        "/docs": {
+            "get": {
+                "tags": [
+                    "/docs"
+                ],
+                "summary": "Com ou sem barra no fim, a especificação fica em /docs/openapi.json",
+                "description": "Com ou sem barra no fim, a especificação fica em /docs/openapi.json.",
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    }
+                }
+            }
+        },
+        "/docs/openapi.json": {
+            "get": {
+                "tags": [
+                    "/docs"
+                ],
+                "summary": "GET /docs/openapi.json",
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
                     }
                 }
             }

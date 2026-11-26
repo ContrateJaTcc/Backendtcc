@@ -96,20 +96,40 @@ function rotasDoArquivo({ prefixo, arquivo, roteador }) {
 
     const rotas = []
     let comentario = null
-    for (const linha of linhas) {
+    for (const [i, linha] of linhas.entries()) {
         const c = linha.trim().match(/^\/\*\s*(.+?)\s*\*\/$/)
         if (c) {
             comentario = c[1]
             continue
         }
-        const m = linha.match(new RegExp(`^${roteador}\\.(get|post|put|patch|delete)\\('([^']*)',\\s*(.+)\\)\\s*$`))
+        /*
+         * Rota numa linha só (com ou sem ";" no fim), ou rota que abre a resposta ali mesmo
+         * e continua nas linhas de baixo: router.get('/x', async (req, res) => {
+         */
+        const m =
+            linha.match(new RegExp(`^${roteador}\\.(get|post|put|patch|delete)\\('([^']*)',\\s*(.+)\\)\\s*;?\\s*$`)) ??
+            linha.match(new RegExp(`^${roteador}\\.(get|post|put|patch|delete)\\('([^']*)',\\s*(.*[{(])\\s*$`))
         if (!m) {
             if (linha.trim() === '') comentario = null
             continue
         }
         const [, metodo, caminho, resto] = m
         const partes = resto.split(',').map((p) => p.trim())
-        const handler = partes[partes.length - 1].startsWith('(') ? 'resposta direta' : partes[partes.length - 1]
+        const ultima = partes[partes.length - 1]
+        const embutida = ultima.startsWith('(') || ultima.startsWith('async') || ultima.endsWith('{')
+        /* Resposta em várias linhas que termina chamando uma função: "}, numeros)" */
+        let seguinte = null
+        if (embutida) {
+            for (const prox of linhas.slice(i + 1)) {
+                if (prox.startsWith(`${roteador}.`)) break
+                const fim = prox.match(/^\}\s*,\s*(\w+)\)\s*;?\s*$/)
+                if (fim) {
+                    seguinte = fim[1]
+                    break
+                }
+            }
+        }
+        const handler = embutida ? seguinte : ultima
         const completo = (prefixo + (caminho === '/' ? '' : caminho)).replace(/\/+$/, '') || '/'
         rotas.push({
             metodo,
@@ -117,7 +137,7 @@ function rotasDoArquivo({ prefixo, arquivo, roteador }) {
             parametros: [...completo.matchAll(/:(\w+)/g)].map((p) => p[1]),
             login: loginGeral || /\bauth\b/.test(resto),
             papeis: [...new Set([...papeisGerais, ...papeisDe(resto, variaveis)])],
-            resumo: resumoDe(handler),
+            resumo: handler ? resumoDe(handler) : (comentario ?? `${metodo.toUpperCase()} ${completo}`),
             descricao: comentario,
             grupo: prefixo
         })

@@ -77,4 +77,26 @@ describe('documentação', () => {
         assert.ok(r.body.paths['/servicos/{id}/etapas/{etaId}/aprovar'].post)
         assert.equal(r.body.paths['/publico/certificado/{servId}'].get.security, undefined)
     })
+
+    test('rotas escritas em várias linhas também entram na documentação', async () => {
+        const r = await request(app).get('/docs/openapi.json')
+        for (const caminho of ['/tipos-servico', '/publico/numeros', '/insignias/{free_id}']) assert.ok(r.body.paths[caminho]?.get, caminho)
+    })
+})
+
+describe('excluir e cancelar o próprio projeto', () => {
+    test('sem login responde 401', async () => {
+        const excluir = await request(app).delete('/servicos/1')
+        const cancelar = await request(app).put('/servicos/1/cancelar')
+        assert.equal(excluir.status, 401)
+        assert.equal(cancelar.status, 401)
+    })
+
+    test('documentadas, com cadeado e só para contratante', async () => {
+        const r = await request(app).get('/docs/openapi.json')
+        const excluir = r.body.paths['/servicos/{id}'].delete
+        const cancelar = r.body.paths['/servicos/{id}/cancelar'].put
+        assert.ok(excluir.security && cancelar.security)
+        assert.match(JSON.stringify(excluir) + JSON.stringify(cancelar), /contratante/)
+    })
 })

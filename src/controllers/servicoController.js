@@ -3,6 +3,7 @@ import { reputacaoContratante } from '../services/reputacao.js'
 import db from '../config/knex.js'
 import { avisarBuscas } from './buscaController.js'
 import { temColuna, temTabela } from '../services/registro.js'
+import { enviarPush } from '../services/push.js'
 
 /* Prazo para candidaturas (opcional): data de hoje em diante, ou vazio */
 function lerPrazoCandidaturas(valor) {
@@ -82,6 +83,176 @@ async function avisarAdminsModeracao(titulo) {
         }
     } catch (erro) {
         console.error(erro)
+    }
+}
+
+/* ---------- Excluir ou cancelar o próprio projeto ---------- */
+
+/* Só projeto que ainda não começou sai do ar pelo dono */
+const STATUS_REMOVIVEIS = ['rascunho', 'aberto']
+
+/* Candidaturas que ainda contam (a cancelada pelo próprio freelancer não prende o projeto) */
+const CANDIDATURAS_ATIVAS = ['pendente', 'aceita', 'recusada']
+
+/*
+ * O que o dono pode fazer:
+ * - excluir de vez: ninguém se envolveu ainda (sem candidatura e sem denúncia em análise)
+ * - cancelar: já tem candidatos, mas ninguém foi contratado; o projeto fica no histórico como cancelado
+ */
+async function situacaoRemocao(serv_id, serv_status) {
+    if (!STATUS_REMOVIVEIS.includes(serv_status)) {
+        return {
+            pode_excluir: false,
+            pode_cancelar: false,
+            candidaturas: 0,
+            motivo: serv_status === 'em_andamento'
+                ? 'O projeto já está em andamento. Para encerrar, combine com o freelancer ou abra uma disputa.'
+                : 'Este projeto já está encerrado.'
+        }
+    }
+
+    const contagem = await db('candidatura')
+        .where('serv_id', serv_id)
+        .whereIn('cand_status', CANDIDATURAS_ATIVAS)
+        .select(
+            db.raw('COUNT(*) AS total'),
+            db.raw("SUM(CASE WHEN cand_status = 'aceita' THEN 1 ELSE 0 END) AS aceitas")
+        )
+        .first()
+    const candidaturas = Number(contagem?.total ?? 0)
+    const aceitas = Number(contagem?.aceitas ?? 0)
+
+    if (aceitas > 0) {
+        return { pode_excluir: false, pode_cancelar: false, candidaturas, motivo: 'Você já contratou alguém para este projeto.' }
+    }
+
+    /* Denúncia em análise: o projeto não some antes da administração olhar */
+    const denunciado = (await temTabela('denuncia'))
+        ? await db('denuncia').where({ den_alvo_tipo: 'servico', den_alvo_id: serv_id, den_status: 'aberta' }).first('den_id')
+        : null
+
+    if (candidaturas === 0 && !denunciado) {
+        return { pode_excluir: true, pode_cancelar: false, candidaturas, motivo: null }
+    }
+
+    return {
+        pode_excluir: false,
+        pode_cancelar: true,
+        candidaturas,
+        motivo: denunciado
+            ? 'Este projeto está em análise pela administração, então não pode ser excluído, só cancelado.'
+            : 'Já tem gente candidatada: o projeto pode ser cancelado, mas fica no seu histórico.'
+    }
+}
+
+/* Projeto do contratante logado (null se não for dele) */
+async function projetoDoDono(req) {
+    const contratante = await db('contratante').select('cont_id').where('usu_id', req.usuario.id).first()
+    if (!contratante) return null
+    return db('servico')
+        .where({ serv_id: req.params.id, cont_id: contratante.cont_id })
+        .select('serv_id', 'serv_titulo', 'serv_status')
+        .first()
+}
+
+/* DELETE /servicos/:id: apaga de vez um projeto em que ninguém se envolveu */
+export const excluirServico = async (req, res) => {
+    try {
+        const projeto = await projetoDoDono(req)
+        if (!projeto) return res.status(404).json({ erro: 'Projeto não encontrado.' })
+
+        const situacao = await situacaoRemocao(projeto.serv_id, projeto.serv_status)
+        if (!situacao.pode_excluir) {
+            return res.status(409).json({ erro: situacao.motivo, pode_cancelar: situacao.pode_cancelar })
+        }
+
+        /*
+         * Apaga só se continuar sem candidatura nesse instante (alguém pode ter se candidatado agora).
+         * O resto (salvos, mensagens, etapas...) sai junto pelo ON DELETE CASCADE do banco.
+         */
+        const apagados = await db('servico')
+            .where('serv_id', projeto.serv_id)
+            .whereIn('serv_status', STATUS_REMOVIVEIS)
+            .whereNotExists(
+                db('candidatura')
+                    .select(db.raw('1'))
+                    .whereRaw('candidatura.serv_id = servico.serv_id')
+                    .whereIn('cand_status', CANDIDATURAS_ATIVAS)
+            )
+            .del()
+
+        if (!apagados) {
+            return res.status(409).json({ erro: 'Alguém acabou de se candidatar. Agora o projeto só pode ser cancelado.', pode_cancelar: true })
+        }
+
+        return res.json({ mensagem: projeto.serv_status === 'rascunho' ? 'Rascunho excluído.' : 'Projeto excluído.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao excluir o projeto.' })
+    }
+}
+
+/* PUT /servicos/:id/cancelar: tira do ar um projeto que já tem candidatos; quem esperava resposta é avisado */
+export const cancelarMeuServico = async (req, res) => {
+    try {
+        const projeto = await projetoDoDono(req)
+        if (!projeto) return res.status(404).json({ erro: 'Projeto não encontrado.' })
+
+        const situacao = await situacaoRemocao(projeto.serv_id, projeto.serv_status)
+        if (!situacao.pode_cancelar) {
+            return res.status(409).json({ erro: situacao.motivo || 'Este projeto não pode ser cancelado.', pode_excluir: situacao.pode_excluir })
+        }
+
+        const motivo = String(req.body?.motivo ?? '').trim().slice(0, 300)
+
+        const avisados = await db.transaction(async (trx) => {
+            const mudou = await trx('servico')
+                .where('serv_id', projeto.serv_id)
+                .whereIn('serv_status', STATUS_REMOVIVEIS)
+                .whereNotExists(
+                    trx('candidatura')
+                        .select(trx.raw('1'))
+                        .whereRaw('candidatura.serv_id = servico.serv_id')
+                        .where('cand_status', 'aceita')
+                )
+                .update({ serv_status: 'cancelado' })
+            if (!mudou) return null
+
+            const pendentes = await trx('candidatura')
+                .join('freelancer', 'candidatura.free_id', 'freelancer.free_id')
+                .where({ 'candidatura.serv_id': projeto.serv_id, 'candidatura.cand_status': 'pendente' })
+                .pluck('freelancer.usu_id')
+
+            await trx('candidatura')
+                .where({ serv_id: projeto.serv_id, cand_status: 'pendente' })
+                .update({ cand_status: 'recusada' })
+
+            return pendentes
+        })
+
+        if (avisados === null) {
+            return res.status(409).json({ erro: 'O projeto mudou enquanto você cancelava. Recarregue a página.' })
+        }
+
+        if (avisados.length) {
+            const texto = `"${projeto.serv_titulo}" foi cancelado pelo contratante${motivo ? `: ${motivo}` : '.'}`.slice(0, 500)
+            try {
+                await db('notificacao').insert(avisados.map((usu_id) => ({ usu_id, not_titulo: 'Projeto cancelado', not_desc: texto })))
+                await enviarPush(avisados, { titulo: 'Projeto cancelado', texto })
+            } catch (erro) {
+                console.error(erro)
+            }
+        }
+
+        return res.json({
+            mensagem: avisados.length
+                ? `Projeto cancelado. ${avisados.length === 1 ? 'O candidato foi avisado' : `Os ${avisados.length} candidatos foram avisados`}.`
+                : 'Projeto cancelado.',
+            avisados: avisados.length
+        })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao cancelar o projeto.' })
     }
 }
 
@@ -355,6 +526,8 @@ export const buscarServicoPorId = async (req, res) => {
         const dono = await db('contratante').where('cont_id', projeto.cont_id).select('usu_id').first()
         projeto.contratante_reputacao = dono ? await reputacaoContratante(dono.usu_id) : null
         projeto.mudancas = await mudancasDepoisDaCandidatura(projeto.serv_id, req.usuario)
+        /* Só o dono chega aqui como contratante: diz se ele pode excluir ou cancelar o projeto */
+        if (req.usuario.tipo === 'contratante') projeto.remocao = await situacaoRemocao(projeto.serv_id, projeto.serv_status)
 
         return res.json({ projeto })
 

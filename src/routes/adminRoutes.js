@@ -5,6 +5,7 @@ import * as extras from '../controllers/extrasController.js'
 import * as contratacao from '../controllers/contratacaoController.js'
 import * as moderacao from '../controllers/moderacaoController.js'
 import * as painel from '../controllers/painelController.js'
+import * as categorias from '../controllers/categoriaController.js'
 import auth from '../middleware/auth.js'
 import { exigirAdmin, exigirSupremo } from '../middleware/papel.js'
 
@@ -33,6 +34,11 @@ router.delete('/erros/:id', moderacao.limparErros)
 router.put('/denuncias/:id', extras.fecharDenuncia)
 router.get('/disputas', contratacao.listarDisputas)
 router.put('/disputas/:id', contratacao.resolverDisputa)
+/* Categorias de projeto: com projetos não dá para excluir, só desativar */
+router.get('/categorias', categorias.listarTodas)
+router.post('/categorias', categorias.criar)
+router.put('/categorias/:id', categorias.editar)
+router.delete('/categorias/:id', categorias.excluir)
 
 /* Só o administrador supremo */
 router.put('/usuarios/:id/papel', exigirSupremo, supremoController.mudarPapel)

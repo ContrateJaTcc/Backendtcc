@@ -34,6 +34,8 @@ router.post('/:id/salvar', auth, freelancer, salvoController.salvar)
 router.delete('/:id/salvar', auth, freelancer, salvoController.remover)
 
 router.post('/:id/candidaturas', auth, freelancer, limiteCandidatura, candidaturaController.candidatarSe)
+/* O freelancer muda valor, prazo e recado enquanto espera a resposta */
+router.put('/:id/candidaturas', auth, freelancer, limiteCandidatura, candidaturaController.editarCandidatura)
 router.delete('/:id/candidaturas', auth, freelancer, candidaturaController.cancelarCandidatura)
 
 router.put('/:id/entregar', auth, freelancer, entregarServico)
@@ -71,6 +73,8 @@ router.post('/:id/etapas', auth, contratante, etapaController.criarEtapa)
 router.delete('/:id/etapas/:etaId', auth, contratante, etapaController.removerEtapa)
 router.put('/:id/etapas/:etaId', auth, freelancer, etapaController.concluirEtapa)
 router.post('/:id/etapas/:etaId/aprovar', auth, contratante, etapaController.aprovarEtapa)
+/* O contratante renomeia ou muda a ordem de uma etapa */
+router.put('/:id/etapas/:etaId/editar', auth, contratante, etapaController.editarEtapa)
 /* O dono tira o projeto do ar: cancela (já tem candidatos) ou exclui de vez (ninguém se envolveu) */
 router.put('/:id/cancelar', auth, contratante, servicoController.cancelarMeuServico)
 router.get('/:id', auth, servicoController.buscarServicoPorId)

@@ -4,6 +4,7 @@ import db from '../config/knex.js'
 import { avisarBuscas } from './buscaController.js'
 import { temColuna, temTabela } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
+import { categoriaInvalida } from './categoriaController.js'
 
 /* Prazo para candidaturas (opcional): data de hoje em diante, ou vazio */
 function lerPrazoCandidaturas(valor) {
@@ -295,6 +296,10 @@ export const criarServico = async (req, res) => {
                 erro: 'Apenas contratantes podem criar projetos.'
             })
         }
+
+        /* Categoria desativada pela administração não recebe projeto novo */
+        const erroCategoria = await categoriaInvalida(tipo_id)
+        if (erroCategoria) return res.status(400).json({ erro: erroCategoria })
 
         const contratante = await db('contratante')
             .select('cont_id')
@@ -600,6 +605,10 @@ export const atualizarServico = async (req, res) => {
         if (!prazoCand.ok) {
             return res.status(400).json({ erro: prazoCand.erro })
         }
+
+        /* A categoria que o projeto já tem continua valendo, mesmo se foi desativada */
+        const erroCategoria = await categoriaInvalida(tipo_id, projeto.tipo_id)
+        if (erroCategoria) return res.status(400).json({ erro: erroCategoria })
 
         const extrasPrazo = (await temColuna('servico', 'serv_candidaturas_ate')) ? prazoCand.campos : {}
 

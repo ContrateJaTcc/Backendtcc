@@ -1,5 +1,5 @@
 import db from '../config/knex.js'
-import { temTabela } from '../services/registro.js'
+import { temColuna, temTabela } from '../services/registro.js'
 import { enviarPush } from '../services/push.js'
 import { inicioDoMes } from '../services/aparencia.js'
 
@@ -238,5 +238,33 @@ export const removerMembro = async (req, res) => {
     } catch (erro) {
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao remover o membro.' })
+    }
+}
+
+/* DELETE /guildas/:id: a liderança dissolve a guilda; todos os membros saem e são avisados */
+export const dissolver = async (req, res) => {
+    try {
+        if (!(await pronto())) return res.status(503).json({ erro: 'As guildas ainda estão sendo preparadas.' })
+        const gui_id = Number(req.params.id)
+        const g = await db('guilda').where('gui_id', gui_id).first()
+        if (!g) return res.status(404).json({ erro: 'Guilda não encontrada.' })
+        const eu = await db('guilda_membro').where({ gui_id, usu_id: req.usuario.id }).first()
+        if (eu?.gme_papel !== 'lider') return res.status(403).json({ erro: 'Só a liderança dissolve a guilda.' })
+
+        const outros = await db('guilda_membro').where('gui_id', gui_id).whereNot('usu_id', req.usuario.id).pluck('usu_id')
+
+        await db.transaction(async (trx) => {
+            /* Candidaturas feitas "com a guilda" continuam valendo, só sem o time */
+            if (await temColuna('candidatura', 'cand_gui_id')) await trx('candidatura').where('cand_gui_id', gui_id).update({ cand_gui_id: null })
+            /* Os membros saem junto pelo ON DELETE CASCADE */
+            await trx('guilda').where('gui_id', gui_id).del()
+        })
+
+        for (const usu_id of outros) await notificar(usu_id, 'Guilda dissolvida', `A liderança dissolveu a ${g.gui_nome}. Você pode entrar em outra ou fundar a sua.`)
+
+        return res.json({ mensagem: `A ${g.gui_nome} foi dissolvida.` })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao dissolver a guilda.' })
     }
 }

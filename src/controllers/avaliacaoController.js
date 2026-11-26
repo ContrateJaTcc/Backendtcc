@@ -6,7 +6,8 @@ import {
     recalcularRank,
     XP_PROJETO_CONCLUIDO,
     XP_POR_ESTRELA,
-    DIAS_AVALIACAO_CEGA
+    DIAS_AVALIACAO_CEGA,
+    avaliacaoVisivel
 } from '../services/gamificacao.js'
 import { verificarInsignia } from '../services/insigniasServices.js'
 import { enviarPush } from '../services/push.js'
@@ -374,5 +375,124 @@ export const criarAvaliacao = async (req, res) => {
         console.error(erro)
 
         return res.status(500).json({ erro: 'Erro ao enviar avaliação.' })
+    }
+}
+
+/* ---------- Avaliações que eu fiz: ver, corrigir e apagar enquanto estão às cegas ---------- */
+
+/* Nota e notas por critério do corpo; devolve { erro } ou os campos */
+async function lerNotas(body) {
+    const nota = Number(body?.nota)
+    const comentario = String(body?.comentario ?? '').trim()
+    if (!Number.isInteger(nota) || nota < 1 || nota > 5) return { erro: 'Escolha uma nota de 1 a 5 estrelas.' }
+    if (comentario.length > LIMITE_COMENTARIO) return { erro: `O comentário deve ter no máximo ${LIMITE_COMENTARIO} caracteres.` }
+
+    const campos = { aval_nota: nota, aval_comentario: comentario || null }
+    if (await temColuna('avaliacao', 'aval_comunicacao')) {
+        for (const campo of ['comunicacao', 'prazo', 'qualidade']) {
+            const v = body?.[campo]
+            if (v === undefined) continue
+            if (v === null || v === '') {
+                campos[`aval_${campo}`] = null
+                continue
+            }
+            if (!Number.isInteger(Number(v)) || Number(v) < 1 || Number(v) > 5) return { erro: 'As notas por critério vão de 1 a 5.' }
+            campos[`aval_${campo}`] = Number(v)
+        }
+    }
+    return { campos }
+}
+
+/* A avaliação é minha e ainda está às cegas (o outro lado não avaliou e não passaram os 7 dias)? */
+async function minhaAvaliacaoAberta(aval_id, usu_id) {
+    const aval = await db('avaliacao')
+        .where({ aval_id, usu_avaliador: usu_id })
+        .select('avaliacao.*', db.raw(`${avaliacaoVisivel()} AS visivel`))
+        .first()
+    if (!aval) return { status: 404, erro: 'Avaliação não encontrada.' }
+    if (Number(aval.visivel)) return { status: 400, erro: 'Esta avaliação já aparece no perfil e não pode mais ser mudada.' }
+    return { aval }
+}
+
+/* Avaliar freelancer dá XP: mudar a nota ajusta o XP (a diferença) e a insígnia */
+async function ajustarXpDaNota(trx, aval, novaNota) {
+    const avaliado = await trx('usuario').where('usu_id', aval.usu_avaliado).select('tipo_usuario').first()
+    if (avaliado?.tipo_usuario !== 'freelancer') return null
+    const freelancer = await trx('freelancer').where('usu_id', aval.usu_avaliado).select('free_id').first()
+    if (!freelancer) return null
+    const diferenca = (novaNota - aval.aval_nota) * XP_POR_ESTRELA
+    if (diferenca !== 0) await concederXp(trx, freelancer.free_id, diferenca, 'avaliacao')
+    return freelancer.free_id
+}
+
+/* GET /avaliacoes/enviadas */
+export const listarEnviadas = async (req, res) => {
+    try {
+        const criterios = (await temColuna('avaliacao', 'aval_comunicacao')) ? ['avaliacao.aval_comunicacao', 'avaliacao.aval_prazo', 'avaliacao.aval_qualidade'] : []
+        const editada = (await temColuna('avaliacao', 'aval_editada_em')) ? ['avaliacao.aval_editada_em'] : []
+        const linhas = await db('avaliacao')
+            .join('usuario', 'avaliacao.usu_avaliado', 'usuario.usu_id')
+            .join('servico', 'avaliacao.serv_id', 'servico.serv_id')
+            .where('avaliacao.usu_avaliador', req.usuario.id)
+            .select(
+                'avaliacao.aval_id', 'avaliacao.serv_id', 'avaliacao.usu_avaliado', 'avaliacao.aval_nota', 'avaliacao.aval_comentario', 'avaliacao.aval_data',
+                ...criterios, ...editada,
+                'usuario.usu_nome', 'usuario.usu_foto', 'servico.serv_titulo',
+                db.raw(`${avaliacaoVisivel()} AS visivel`)
+            )
+            .orderBy('avaliacao.aval_id', 'desc')
+
+        return res.json({
+            dias_as_cegas: DIAS_AVALIACAO_CEGA,
+            avaliacoes: linhas.map(({ visivel, ...a }) => ({ ...a, editavel: !Number(visivel) }))
+        })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao carregar as suas avaliações.' })
+    }
+}
+
+/* PUT /avaliacoes/:id: corrige nota e comentário enquanto ninguém viu */
+export const editarAvaliacao = async (req, res) => {
+    try {
+        const lido = await lerNotas(req.body)
+        if (lido.erro) return res.status(400).json({ erro: lido.erro })
+
+        const r = await minhaAvaliacaoAberta(Number(req.params.id), req.usuario.id)
+        if (r.erro) return res.status(r.status).json({ erro: r.erro })
+
+        let free_id = null
+        await db.transaction(async (trx) => {
+            free_id = await ajustarXpDaNota(trx, r.aval, lido.campos.aval_nota)
+            await trx('avaliacao')
+                .where('aval_id', r.aval.aval_id)
+                .update({ ...lido.campos, ...((await temColuna('avaliacao', 'aval_editada_em')) ? { aval_editada_em: db.fn.now() } : {}) })
+        })
+        if (free_id) await atualizarInsignia(free_id)
+
+        return res.json({ mensagem: 'Avaliação corrigida. Ela continua às cegas até a outra pessoa avaliar.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao corrigir a avaliação.' })
+    }
+}
+
+/* DELETE /avaliacoes/:id: desfaz a avaliação (volta para "pendente") e o XP que ela deu */
+export const apagarAvaliacao = async (req, res) => {
+    try {
+        const r = await minhaAvaliacaoAberta(Number(req.params.id), req.usuario.id)
+        if (r.erro) return res.status(r.status).json({ erro: r.erro })
+
+        let free_id = null
+        await db.transaction(async (trx) => {
+            free_id = await ajustarXpDaNota(trx, r.aval, 0)
+            await trx('avaliacao').where('aval_id', r.aval.aval_id).del()
+        })
+        if (free_id) await atualizarInsignia(free_id)
+
+        return res.json({ mensagem: 'Avaliação apagada. Ela volta para a lista de pendentes, se quiser avaliar de novo.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao apagar a avaliação.' })
     }
 }

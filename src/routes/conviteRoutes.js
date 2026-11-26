@@ -12,5 +12,7 @@ router.get('/recebidos', auth, freelancer, conviteController.listarRecebidos)
 router.get('/enviados', auth, contratante, conviteController.listarEnviados)
 router.post('/', auth, contratante, conviteController.criarConvite)
 router.put('/:id', auth, freelancer, conviteController.responderConvite)
+/* O contratante retira um convite que ainda não foi respondido */
+router.delete('/:id', auth, contratante, conviteController.retirarConvite)
 
 export default router

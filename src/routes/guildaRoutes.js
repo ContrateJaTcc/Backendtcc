@@ -14,5 +14,7 @@ router.post('/sair', auth, freelancer, guildaController.sair)
 router.put('/:id', auth, freelancer, guildaController.editar)
 router.post('/:id/entrar', auth, freelancer, guildaController.entrar)
 router.delete('/:id/membros/:usuId', auth, freelancer, guildaController.removerMembro)
+/* A liderança dissolve a guilda */
+router.delete('/:id', auth, freelancer, guildaController.dissolver)
 
 export default router

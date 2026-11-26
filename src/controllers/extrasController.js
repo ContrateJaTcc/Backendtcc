@@ -248,3 +248,60 @@ export const resgatarPasso = async (req, res) => {
         return res.status(500).json({ erro: 'Erro ao resgatar o passo.' })
     }
 }
+
+/* ---------- Minhas denúncias: acompanhar e retirar ---------- */
+
+/* GET /denuncias/minhas: o que eu denunciei e em que pé está (sem dizer o que a administração fez com a pessoa) */
+export const listarMinhasDenuncias = async (req, res) => {
+    try {
+        if (!(await temTabela('denuncia'))) return res.json({ denuncias: [] })
+        const linhas = await db('denuncia').where('usu_id', req.usuario.id).orderBy('den_id', 'desc').limit(50)
+
+        const ids = (tipo) => linhas.filter((d) => d.den_alvo_tipo === tipo).map((d) => d.den_alvo_id)
+        const [servicos, usuarios, mensagens] = await Promise.all([
+            ids('servico').length ? db('servico').whereIn('serv_id', ids('servico')).select('serv_id', 'serv_titulo') : [],
+            ids('usuario').length ? db('usuario').whereIn('usu_id', ids('usuario')).select('usu_id', 'usu_nome') : [],
+            ids('mensagem').length
+                ? db('mensagem').join('servico', 'mensagem.serv_id', 'servico.serv_id').whereIn('mensagem.msg_id', ids('mensagem')).select('mensagem.msg_id', 'servico.serv_titulo')
+                : []
+        ])
+
+        const alvo = (d) => {
+            if (d.den_alvo_tipo === 'servico') return `Projeto "${servicos.find((s) => s.serv_id === d.den_alvo_id)?.serv_titulo ?? 'removido'}"`
+            if (d.den_alvo_tipo === 'usuario') return `Perfil de ${usuarios.find((u) => u.usu_id === d.den_alvo_id)?.usu_nome ?? 'conta removida'}`
+            const m = mensagens.find((x) => x.msg_id === d.den_alvo_id)
+            return m ? `Mensagem no chat de "${m.serv_titulo}"` : 'Mensagem removida'
+        }
+
+        return res.json({
+            denuncias: linhas.map((d) => ({
+                den_id: d.den_id,
+                alvo_tipo: d.den_alvo_tipo,
+                alvo: alvo(d),
+                motivo: d.den_motivo,
+                detalhe: d.den_detalhe,
+                status: d.den_status,
+                data: d.den_data
+            }))
+        })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao carregar as suas denúncias.' })
+    }
+}
+
+/* DELETE /denuncias/:id: retira uma denúncia minha que a administração ainda não analisou */
+export const retirarDenuncia = async (req, res) => {
+    try {
+        if (!(await temTabela('denuncia'))) return res.status(503).json({ erro: 'Denúncias ainda não disponíveis.' })
+        const d = await db('denuncia').where({ den_id: Number(req.params.id), usu_id: req.usuario.id }).first()
+        if (!d) return res.status(404).json({ erro: 'Denúncia não encontrada.' })
+        if (d.den_status !== 'aberta') return res.status(400).json({ erro: 'Esta denúncia já foi analisada e não pode ser retirada.' })
+
+        await db('denuncia').where('den_id', d.den_id).del()
+        return res.json({ mensagem: 'Denúncia retirada.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao retirar a denúncia.' })
+    }
+}

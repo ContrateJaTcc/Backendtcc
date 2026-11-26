@@ -11,6 +11,9 @@ pushRoutes.delete('/inscricao', auth, extras.desinscreverPush)
 
 export const denunciaRoutes = express.Router()
 denunciaRoutes.post('/', auth, exigirPapel('freelancer', 'contratante'), extras.denunciar)
+/* As minhas: acompanhar e retirar enquanto a administração não analisou */
+denunciaRoutes.get('/minhas', auth, exigirPapel('freelancer', 'contratante'), extras.listarMinhasDenuncias)
+denunciaRoutes.delete('/:id', auth, exigirPapel('freelancer', 'contratante'), extras.retirarDenuncia)
 
 export const passoRoutes = express.Router()
 passoRoutes.get('/', auth, exigirPapel('freelancer'), extras.listarPassos)

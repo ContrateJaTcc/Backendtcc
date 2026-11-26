@@ -176,6 +176,57 @@ export const removerEtapa = async (req, res) => {
     }
 }
 
+/*
+ * O contratante renomeia a etapa ({ titulo }) e/ou muda a ordem ({ mover: 'cima' | 'baixo' }).
+ * Etapa já paga não muda de nome (o recibo usa o nome dela).
+ */
+export const editarEtapa = async (req, res) => {
+    try {
+        const ctx = await preparar(req, res)
+        if (!ctx) return
+        if (!ctx.ehDono) return res.status(403).json({ erro: 'Só o contratante edita as etapas.' })
+
+        const serv_id = ctx.projeto.serv_id
+        const etapa = await db('servico_etapa').where({ eta_id: req.params.etaId, serv_id }).first()
+        if (!etapa) return res.status(404).json({ erro: 'Etapa não encontrada.' })
+
+        const titulo = req.body?.titulo === undefined ? null : String(req.body.titulo).trim()
+        const mover = req.body?.mover
+        if (titulo === null && mover === undefined) return res.status(400).json({ erro: 'Diga o novo nome ou para onde mover a etapa.' })
+        if (mover !== undefined && mover !== 'cima' && mover !== 'baixo') return res.status(400).json({ erro: 'Mover só para "cima" ou "baixo".' })
+
+        await db.transaction(async (trx) => {
+            if (titulo !== null && titulo !== etapa.eta_titulo) {
+                if (!titulo || titulo.length > LIMITE_TITULO) throw Object.assign(new Error(), { status: 400, erro: `Dê um nome de até ${LIMITE_TITULO} letras para a etapa.` })
+                if (etapa.eta_liberada_em) throw Object.assign(new Error(), { status: 400, erro: 'Esta etapa já foi paga e não pode mudar de nome.' })
+                await trx('servico_etapa').where('eta_id', etapa.eta_id).update({ eta_titulo: titulo })
+            }
+
+            if (mover) {
+                /* Renumera 1..N na ordem atual e troca com a vizinha */
+                const ordem = await trx('servico_etapa').where('serv_id', serv_id).orderBy([{ column: 'eta_ordem' }, { column: 'eta_id' }]).pluck('eta_id')
+                const i = ordem.indexOf(etapa.eta_id)
+                const j = mover === 'cima' ? i - 1 : i + 1
+                if (j < 0 || j >= ordem.length) return
+                ;[ordem[i], ordem[j]] = [ordem[j], ordem[i]]
+                for (const [posicao, eta_id] of ordem.entries()) {
+                    await trx('servico_etapa').where('eta_id', eta_id).update({ eta_ordem: posicao + 1 })
+                }
+            }
+        })
+
+        if (titulo !== null && titulo !== etapa.eta_titulo && ctx.projeto.freelancer_usu_id) {
+            await notificar(ctx.projeto.freelancer_usu_id, 'Etapa renomeada', `"${etapa.eta_titulo}" agora se chama "${titulo}" em "${ctx.projeto.serv_titulo}".`, '/freelancer/entregues')
+        }
+
+        return res.json({ mensagem: mover ? 'Ordem das etapas atualizada.' : 'Etapa renomeada.', etapas: await listar(serv_id) })
+    } catch (erro) {
+        if (erro?.status) return res.status(erro.status).json({ erro: erro.erro })
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao editar a etapa.' })
+    }
+}
+
 /* O freelancer marca (ou desmarca) a etapa como feita */
 export const concluirEtapa = async (req, res) => {
     try {

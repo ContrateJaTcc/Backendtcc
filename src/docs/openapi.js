@@ -1928,12 +1928,48 @@ export default {
                     }
                 }
             },
+            "put": {
+                "tags": [
+                    "/servicos"
+                ],
+                "summary": "Editar candidatura",
+                "description": "O freelancer muda valor, prazo e recado enquanto espera a resposta. Papel: freelancer.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
             "delete": {
                 "tags": [
                     "/servicos"
                 ],
                 "summary": "Cancelar candidatura",
-                "description": "Papel: freelancer.",
+                "description": "O freelancer muda valor, prazo e recado enquanto espera a resposta. Papel: freelancer.",
                 "parameters": [
                     {
                         "name": "id",
@@ -2889,6 +2925,52 @@ export default {
                 }
             }
         },
+        "/servicos/{id}/etapas/{etaId}/editar": {
+            "put": {
+                "tags": [
+                    "/servicos"
+                ],
+                "summary": "Editar etapa",
+                "description": "O contratante renomeia ou muda a ordem de uma etapa. Papel: contratante.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "etaId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
         "/servicos/{id}/cancelar": {
             "put": {
                 "tags": [
@@ -3064,8 +3146,8 @@ export default {
                 "tags": [
                     "/tipos-servico"
                 ],
-                "summary": "Tipos de serviço",
-                "description": "Tipos de serviço.",
+                "summary": "Listar ativas",
+                "description": "Categorias ativas (a administração gerencia em /admin/categorias).",
                 "responses": {
                     "200": {
                         "description": "Deu certo (JSON)"
@@ -3388,13 +3470,81 @@ export default {
                 }
             }
         },
+        "/mensagens/{msgId}": {
+            "put": {
+                "tags": [
+                    "/mensagens"
+                ],
+                "summary": "Editar mensagem",
+                "description": "A própria mensagem de texto: editar ou apagar até 15 minutos depois de enviar.",
+                "parameters": [
+                    {
+                        "name": "msgId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/mensagens"
+                ],
+                "summary": "Apagar mensagem",
+                "description": "A própria mensagem de texto: editar ou apagar até 15 minutos depois de enviar.",
+                "parameters": [
+                    {
+                        "name": "msgId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            }
+        },
         "/mensagens/digitando": {
             "post": {
                 "tags": [
                     "/mensagens"
                 ],
                 "summary": "Avisar digitando",
-                "description": "Tempo real: segura a resposta até chegar mensagem nova.",
+                "description": "A própria mensagem de texto: editar ou apagar até 15 minutos depois de enviar.",
                 "security": [
                     {
                         "token": []
@@ -3419,7 +3569,7 @@ export default {
                     "/mensagens"
                 ],
                 "summary": "Estado conversa",
-                "description": "Tempo real: segura a resposta até chegar mensagem nova.",
+                "description": "A própria mensagem de texto: editar ou apagar até 15 minutos depois de enviar.",
                 "parameters": [
                     {
                         "name": "servId",
@@ -3459,7 +3609,7 @@ export default {
                     "/mensagens"
                 ],
                 "summary": "Listar mensagens",
-                "description": "Tempo real: segura a resposta até chegar mensagem nova.",
+                "description": "A própria mensagem de texto: editar ou apagar até 15 minutos depois de enviar.",
                 "parameters": [
                     {
                         "name": "servId",
@@ -3789,12 +3939,103 @@ export default {
                 }
             }
         },
+        "/avaliacoes/enviadas": {
+            "get": {
+                "tags": [
+                    "/avaliacoes"
+                ],
+                "summary": "Listar enviadas",
+                "description": "As que eu fiz: dá para corrigir ou apagar enquanto estão às cegas.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            }
+        },
         "/avaliacoes": {
             "post": {
                 "tags": [
                     "/avaliacoes"
                 ],
                 "summary": "Criar avaliacao",
+                "description": "As que eu fiz: dá para corrigir ou apagar enquanto estão às cegas.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            }
+        },
+        "/avaliacoes/{id}": {
+            "put": {
+                "tags": [
+                    "/avaliacoes"
+                ],
+                "summary": "Editar avaliacao",
+                "description": "As que eu fiz: dá para corrigir ou apagar enquanto estão às cegas.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/avaliacoes"
+                ],
+                "summary": "Apagar avaliacao",
+                "description": "As que eu fiz: dá para corrigir ou apagar enquanto estão às cegas.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "security": [
                     {
                         "token": []
@@ -3832,6 +4073,29 @@ export default {
                         "description": "Sem login ou sessão encerrada"
                     }
                 }
+            },
+            "delete": {
+                "tags": [
+                    "/notificacoes"
+                ],
+                "summary": "Limpar",
+                "description": "Limpar o sino: apaga as lidas (?todas=1 apaga todas).",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
             }
         },
         "/notificacoes/lidas": {
@@ -3840,6 +4104,74 @@ export default {
                     "/notificacoes"
                 ],
                 "summary": "Marcar todas lidas",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            }
+        },
+        "/notificacoes/{id}": {
+            "put": {
+                "tags": [
+                    "/notificacoes"
+                ],
+                "summary": "Marcar uma",
+                "description": "Uma notificação: lida/não lida e apagar.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/notificacoes"
+                ],
+                "summary": "Apagar uma",
+                "description": "Uma notificação: lida/não lida e apagar.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "security": [
                     {
                         "token": []
@@ -3966,6 +4298,42 @@ export default {
                 ],
                 "summary": "Responder convite",
                 "description": "Papel: freelancer.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/convites"
+                ],
+                "summary": "Retirar convite",
+                "description": "O contratante retira um convite que ainda não foi respondido. Papel: contratante.",
                 "parameters": [
                     {
                         "name": "id",
@@ -4470,6 +4838,131 @@ export default {
                 ],
                 "summary": "Resolver disputa",
                 "description": "Funil (onde as pessoas desistem) e saúde do servidor. Papel: administrador.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
+        "/admin/categorias": {
+            "get": {
+                "tags": [
+                    "/admin"
+                ],
+                "summary": "Listar todas",
+                "description": "Categorias de projeto: com projetos não dá para excluir, só desativar. Papel: administrador.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "/admin"
+                ],
+                "summary": "Criar",
+                "description": "Categorias de projeto: com projetos não dá para excluir, só desativar. Papel: administrador.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
+        "/admin/categorias/{id}": {
+            "put": {
+                "tags": [
+                    "/admin"
+                ],
+                "summary": "Editar",
+                "description": "Categorias de projeto: com projetos não dá para excluir, só desativar. Papel: administrador.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/admin"
+                ],
+                "summary": "Excluir",
+                "description": "Categorias de projeto: com projetos não dá para excluir, só desativar. Papel: administrador.",
                 "parameters": [
                     {
                         "name": "id",
@@ -5077,6 +5570,69 @@ export default {
                 }
             }
         },
+        "/denuncias/minhas": {
+            "get": {
+                "tags": [
+                    "/denuncias"
+                ],
+                "summary": "Listar minhas denuncias",
+                "description": "As minhas: acompanhar e retirar enquanto a administração não analisou. Papel: freelancer ou contratante.",
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
+        "/denuncias/{id}": {
+            "delete": {
+                "tags": [
+                    "/denuncias"
+                ],
+                "summary": "Retirar denuncia",
+                "description": "As minhas: acompanhar e retirar enquanto a administração não analisou. Papel: freelancer ou contratante.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
         "/passos": {
             "get": {
                 "tags": [
@@ -5192,6 +5748,42 @@ export default {
             }
         },
         "/buscas/{id}": {
+            "put": {
+                "tags": [
+                    "/buscas"
+                ],
+                "summary": "Editar busca",
+                "description": "Papel: freelancer.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
             "delete": {
                 "tags": [
                     "/buscas"
@@ -5699,6 +6291,42 @@ export default {
                 ],
                 "summary": "Editar",
                 "description": "Guildas de freelancers (até 6 por guilda, uma guilda por pessoa). Papel: freelancer.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/guildas"
+                ],
+                "summary": "Dissolver",
+                "description": "A liderança dissolve a guilda. Papel: freelancer.",
                 "parameters": [
                     {
                         "name": "id",
@@ -6255,6 +6883,80 @@ export default {
                 ],
                 "summary": "Fechar pedido",
                 "description": "Papel: contratante.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            }
+        },
+        "/orcamentos/{id}": {
+            "put": {
+                "tags": [
+                    "/orcamentos"
+                ],
+                "summary": "Editar pedido",
+                "description": "Antes de alguém responder: corrigir a pergunta ou apagar o pedido. Papel: contratante.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "token": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deu certo (JSON)"
+                    },
+                    "400": {
+                        "description": "Dados inválidos: { erro }"
+                    },
+                    "401": {
+                        "description": "Sem login ou sessão encerrada"
+                    },
+                    "403": {
+                        "description": "Papel sem permissão"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "/orcamentos"
+                ],
+                "summary": "Apagar pedido",
+                "description": "Antes de alguém responder: corrigir a pergunta ou apagar o pedido. Papel: contratante.",
                 "parameters": [
                     {
                         "name": "id",

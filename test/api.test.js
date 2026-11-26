@@ -100,3 +100,43 @@ describe('excluir e cancelar o próprio projeto', () => {
         assert.match(JSON.stringify(excluir) + JSON.stringify(cancelar), /contratante/)
     })
 })
+
+describe('CRUD completo (categorias, notificações, candidatura, convite, chat, avaliações e mais)', () => {
+    const ROTAS = [
+        ['get', '/admin/categorias'], ['post', '/admin/categorias'], ['put', '/admin/categorias/1'], ['delete', '/admin/categorias/1'],
+        ['put', '/notificacoes/1'], ['delete', '/notificacoes/1'], ['delete', '/notificacoes'],
+        ['put', '/servicos/1/candidaturas'],
+        ['delete', '/convites/1'],
+        ['put', '/mensagens/1'], ['delete', '/mensagens/1'],
+        ['get', '/avaliacoes/enviadas'], ['put', '/avaliacoes/1'], ['delete', '/avaliacoes/1'],
+        ['put', '/buscas/1'],
+        ['put', '/servicos/1/etapas/1/editar'],
+        ['put', '/orcamentos/1'], ['delete', '/orcamentos/1'],
+        ['delete', '/guildas/1'],
+        ['get', '/denuncias/minhas'], ['delete', '/denuncias/1']
+    ]
+
+    test('todas pedem login', async () => {
+        for (const [metodo, caminho] of ROTAS) {
+            const r = await request(app)[metodo](caminho)
+            assert.equal(r.status, 401, `${metodo.toUpperCase()} ${caminho}`)
+        }
+    })
+
+    test('todas estão na documentação, com o papel certo', async () => {
+        const { body } = await request(app).get('/docs/openapi.json')
+        for (const [metodo, caminho] of ROTAS) {
+            const chave = Object.keys(body.paths).find((p) => new RegExp('^' + p.replace(/\{[^}]+\}/g, '[^/]+') + '$').test(caminho) && body.paths[p][metodo])
+            assert.ok(chave, `${metodo.toUpperCase()} ${caminho} na documentação`)
+            assert.ok(body.paths[chave][metodo].security, `${metodo.toUpperCase()} ${caminho} com cadeado`)
+        }
+        assert.match(JSON.stringify(body.paths['/admin/categorias'].post), /administrador/)
+        assert.match(JSON.stringify(body.paths['/convites/{id}'].delete), /contratante/)
+        assert.match(JSON.stringify(body.paths['/guildas/{id}'].delete), /freelancer/)
+    })
+
+    test('a migration nova está na lista do servidor', async () => {
+        const { MIGRACOES } = await import('../src/database/migracoes.js')
+        assert.ok(MIGRACOES['20261126000000_crud_completo.js'])
+    })
+})

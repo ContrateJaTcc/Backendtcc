@@ -139,3 +139,57 @@ export const fecharPedido = async (req, res) => {
         return res.status(500).json({ erro: 'Erro ao encerrar o pedido.' })
     }
 }
+
+/* Pedido do contratante logado, com o resumo das respostas */
+async function meuPedido(orc_id, usu_id) {
+    const pedido = await db('orcamento_pedido').where({ orc_id, usu_id }).first()
+    if (!pedido) return null
+    const respostas = await db('orcamento_resposta').where('orc_id', orc_id).select('usu_id', 'res_status')
+    return { pedido, respostas, respondidas: respostas.filter((r) => r.res_status === 'respondido').length }
+}
+
+/* PUT /orcamentos/:id: corrige a pergunta enquanto ninguém respondeu (quem recebeu é avisado) */
+export const editarPedido = async (req, res) => {
+    try {
+        if (!(await temTabela('orcamento_pedido'))) return semMigracao(res)
+        const pergunta = String(req.body?.pergunta ?? '').trim()
+        if (pergunta.length < 15 || pergunta.length > 600) return res.status(400).json({ erro: 'Descreva o que precisa em 15 a 600 letras.' })
+
+        const meu = await meuPedido(Number(req.params.id), req.usuario.id)
+        if (!meu) return res.status(404).json({ erro: 'Pedido não encontrado.' })
+        if (meu.pedido.orc_fechado) return res.status(400).json({ erro: 'Este pedido já foi encerrado.' })
+        if (meu.respondidas > 0) return res.status(400).json({ erro: 'Alguém já respondeu: mudar a pergunta agora deixaria a resposta sem sentido. Encerre e faça um pedido novo.' })
+
+        await db('orcamento_pedido').where('orc_id', meu.pedido.orc_id).update({ orc_pergunta: pergunta })
+
+        const aguardando = meu.respostas.filter((r) => r.res_status === 'aguardando').map((r) => r.usu_id)
+        if (aguardando.length) {
+            const titulo = 'Pedido de orçamento mudou'
+            const texto = `O contratante ajustou o pedido: "${pergunta.slice(0, 100)}${pergunta.length > 100 ? '...' : ''}"`
+            await db('notificacao').insert(aguardando.map((usu_id) => ({ usu_id, not_titulo: titulo, not_desc: texto })))
+            await enviarPush(aguardando, { titulo, texto, url: '/freelancer/orcamentos' })
+        }
+
+        return res.json({ mensagem: 'Pedido atualizado.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao atualizar o pedido.' })
+    }
+}
+
+/* DELETE /orcamentos/:id: apaga o pedido que ninguém respondeu (com resposta, o certo é encerrar) */
+export const apagarPedido = async (req, res) => {
+    try {
+        if (!(await temTabela('orcamento_pedido'))) return semMigracao(res)
+        const meu = await meuPedido(Number(req.params.id), req.usuario.id)
+        if (!meu) return res.status(404).json({ erro: 'Pedido não encontrado.' })
+        if (meu.respondidas > 0) return res.status(400).json({ erro: 'Este pedido já tem resposta. Encerre em vez de apagar, para não sumir com o orçamento de quem respondeu.' })
+
+        /* As respostas (todas "aguardando" ou "recusado") saem junto pelo ON DELETE CASCADE */
+        await db('orcamento_pedido').where('orc_id', meu.pedido.orc_id).del()
+        return res.json({ mensagem: 'Pedido apagado.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao apagar o pedido.' })
+    }
+}

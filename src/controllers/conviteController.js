@@ -245,3 +245,30 @@ export const responderConvite = async (req, res) => {
         return res.status(500).json({ erro: 'Erro ao responder convite.' })
     }
 }
+
+/* Retirar: o contratante desfaz um convite que ainda não foi respondido */
+export const retirarConvite = async (req, res) => {
+    try {
+        const convite = await db('convite')
+            .join('servico', 'convite.serv_id', 'servico.serv_id')
+            .join('contratante', 'servico.cont_id', 'contratante.cont_id')
+            .join('freelancer', 'convite.free_id', 'freelancer.free_id')
+            .where('convite.conv_id', req.params.id)
+            .where('contratante.usu_id', req.usuario.id)
+            .select('convite.conv_id', 'convite.conv_status', 'servico.serv_titulo', 'freelancer.usu_id as freelancer_usu_id')
+            .first()
+
+        if (!convite) return res.status(404).json({ erro: 'Convite não encontrado.' })
+        if (convite.conv_status !== 'pendente') {
+            return res.status(400).json({ erro: 'Este convite já foi respondido e não pode ser retirado.' })
+        }
+
+        await db('convite').where('conv_id', convite.conv_id).del()
+        await notificar(convite.freelancer_usu_id, 'Convite retirado', `O contratante retirou o convite para "${convite.serv_titulo}".`)
+
+        return res.json({ mensagem: 'Convite retirado.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao retirar o convite.' })
+    }
+}

@@ -57,3 +57,55 @@ export const marcarTodasLidas = async (req, res) => {
         return res.status(500).json({ erro: 'Erro ao atualizar notificações.' })
     }
 }
+
+/* Uma notificação: marcar como lida ou não lida ({ lida: true | false }) */
+export const marcarUma = async (req, res) => {
+    try {
+        const lida = req.body?.lida !== false
+        const alteradas = await db('notificacao')
+            .where({ not_id: Number(req.params.id), usu_id: req.usuario.id })
+            .update({ not_lida: lida })
+
+        if (!alteradas) return res.status(404).json({ erro: 'Notificação não encontrada.' })
+        return res.json({ mensagem: lida ? 'Marcada como lida.' : 'Marcada como não lida.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao atualizar a notificação.' })
+    }
+}
+
+/* Apagar uma notificação */
+export const apagarUma = async (req, res) => {
+    try {
+        const apagadas = await db('notificacao')
+            .where({ not_id: Number(req.params.id), usu_id: req.usuario.id })
+            .del()
+
+        if (!apagadas) return res.status(404).json({ erro: 'Notificação não encontrada.' })
+        return res.json({ mensagem: 'Notificação apagada.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao apagar a notificação.' })
+    }
+}
+
+/* Limpar: apaga as já lidas (com ?todas=1, apaga todas) */
+export const limpar = async (req, res) => {
+    try {
+        const todas = req.query.todas === '1'
+        const apagadas = await db('notificacao')
+            .where('usu_id', req.usuario.id)
+            .modify((q) => {
+                if (!todas) q.where('not_lida', true)
+            })
+            .del()
+
+        return res.json({
+            mensagem: apagadas ? `${apagadas} ${apagadas === 1 ? 'notificação apagada' : 'notificações apagadas'}.` : 'Nada para limpar.',
+            apagadas
+        })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao limpar as notificações.' })
+    }
+}

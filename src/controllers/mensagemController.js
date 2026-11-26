@@ -29,7 +29,33 @@ async function colunasMensagem(extra = []) {
     if (await temColuna('mensagem', 'msg_proposta_valor')) base.push('msg_proposta_valor', 'msg_proposta_prazo', 'msg_proposta_status')
     if (await temColuna('mensagem', 'msg_reuniao_em')) base.push('msg_reuniao_em', 'msg_reuniao_link', 'msg_reuniao_status', 'msg_alerta_contato')
     if (await temColuna('mensagem', 'msg_resposta_id')) base.push('msg_resposta_id')
+    if (await temColuna('mensagem', 'msg_apagada_em')) base.push('msg_editada_em', 'msg_apagada_em')
     return base
+}
+
+/* Editar ou apagar a própria mensagem: só texto comum (proposta e reunião têm o próprio fluxo) e por pouco tempo */
+export const MINUTOS_PARA_ALTERAR = 15
+
+async function minhaMensagemAlteravel(msg_id, usu_id) {
+    if (!(await temColuna('mensagem', 'msg_apagada_em'))) return { status: 503, erro: 'Editar e apagar mensagens ainda não está disponível.' }
+
+    const colunas = ['msg_id', 'serv_id', 'usu_remetente', 'usu_destinatario', 'msg_texto', 'msg_data', 'msg_apagada_em']
+    if (await temColuna('mensagem', 'msg_proposta_valor')) colunas.push('msg_proposta_status')
+    if (await temColuna('mensagem', 'msg_reuniao_em')) colunas.push('msg_reuniao_status')
+    const msg = await db('mensagem').where('msg_id', msg_id).select(colunas).first()
+
+    if (!msg || msg.usu_remetente !== usu_id) return { status: 404, erro: 'Mensagem não encontrada.' }
+    if (msg.msg_apagada_em) return { status: 400, erro: 'Esta mensagem já foi apagada.' }
+    if (msg.msg_proposta_status || msg.msg_reuniao_status) return { status: 400, erro: 'Propostas e reuniões não podem ser editadas nem apagadas.' }
+    if (Date.now() - new Date(msg.msg_data).getTime() > MINUTOS_PARA_ALTERAR * 60_000) {
+        return { status: 400, erro: `Só dá para editar ou apagar até ${MINUTOS_PARA_ALTERAR} minutos depois de enviar.` }
+    }
+    /* Mensagem denunciada fica como está até a administração olhar */
+    if (await temTabela('denuncia')) {
+        const denunciada = await db('denuncia').where({ den_alvo_tipo: 'mensagem', den_alvo_id: msg.msg_id, den_status: 'aberta' }).first('den_id')
+        if (denunciada) return { status: 400, erro: 'Esta mensagem está em análise pela administração e não pode ser alterada.' }
+    }
+    return { msg }
 }
 
 /* "Maria S.": antes da contratação, o chat mostra só o primeiro nome e a inicial (para os dois lados) */
@@ -94,7 +120,8 @@ export const listarConversas = async (req, res) => {
                 'mensagem.msg_texto',
                 'mensagem.msg_data',
                 'mensagem.msg_lida',
-                'servico.serv_titulo'
+                'servico.serv_titulo',
+                ...((await temColuna('mensagem', 'msg_apagada_em')) ? ['mensagem.msg_apagada_em'] : [])
             )
             .orderBy('mensagem.msg_id', 'desc')
 
@@ -111,7 +138,7 @@ export const listarConversas = async (req, res) => {
                     serv_id: m.serv_id,
                     serv_titulo: m.serv_titulo,
                     outro_usu_id: outroId,
-                    ultima_mensagem: m.msg_texto || 'Imagem',
+                    ultima_mensagem: m.msg_apagada_em ? 'Mensagem apagada' : m.msg_texto || 'Imagem',
                     ultima_data: m.msg_data,
                     nao_lidas: 0
                 })
@@ -855,17 +882,82 @@ export const estadoConversa = async (req, res) => {
         const permissao = await podeConversar(req.usuario.id, serv_id)
         if (!permissao.ok) return res.status(403).json({ erro: permissao.motivo })
 
-        const [digitando, lida, visto] = await Promise.all([
+        const comAlteracao = await temColuna('mensagem', 'msg_apagada_em')
+        const [digitando, lida, visto, alteracao] = await Promise.all([
             (await temTabela('chat_digitando'))
                 ? db('chat_digitando').where({ serv_id, usu_id: outro, outro_id: req.usuario.id }).where('dig_ate', '>', new Date()).first()
                 : null,
             db('mensagem').where({ serv_id, usu_remetente: req.usuario.id, usu_destinatario: outro, msg_lida: true }).max('msg_id as ultimo').first(),
-            vistoDoUsuario(outro)
+            vistoDoUsuario(outro),
+            /* Última edição ou exclusão na conversa: o site recarrega as mensagens quando muda */
+            comAlteracao
+                ? db('mensagem')
+                    .where('serv_id', serv_id)
+                    .where((q) => q.where({ usu_remetente: req.usuario.id, usu_destinatario: outro }).orWhere({ usu_remetente: outro, usu_destinatario: req.usuario.id }))
+                    .select(db.raw('MAX(msg_editada_em) AS editada'), db.raw('MAX(msg_apagada_em) AS apagada'))
+                    .first()
+                : null
         ])
 
-        return res.json({ digitando: Boolean(digitando), lidas_ate: Number(lida?.ultimo) || 0, visto_em: visto })
+        const marcas = [alteracao?.editada, alteracao?.apagada].filter(Boolean).map((d) => new Date(d).getTime())
+        return res.json({
+            digitando: Boolean(digitando),
+            lidas_ate: Number(lida?.ultimo) || 0,
+            visto_em: visto,
+            alterada_em: marcas.length ? new Date(Math.max(...marcas)).toISOString() : null
+        })
     } catch (erro) {
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao carregar a conversa.' })
+    }
+}
+
+/* PUT /mensagens/:msgId: corrige o texto da própria mensagem (até 15 minutos depois) */
+export const editarMensagem = async (req, res) => {
+    try {
+        const texto = String(req.body?.texto ?? '').trim()
+        if (!texto) return res.status(400).json({ erro: 'A mensagem não pode ficar vazia. Para tirar, apague.' })
+        if (texto.length > 2000) return res.status(400).json({ erro: 'A mensagem pode ter até 2000 letras.' })
+
+        const r = await minhaMensagemAlteravel(Number(req.params.msgId), req.usuario.id)
+        if (r.erro) return res.status(r.status).json({ erro: r.erro })
+        const { msg } = r
+
+        /* Contato por fora colocado na edição continua ganhando o aviso (antes da contratação) */
+        const alerta = temContatoExterno(texto) && (await temColuna('mensagem', 'msg_alerta_contato')) && !(await jaContratado(msg.serv_id, msg.usu_remetente, msg.usu_destinatario))
+
+        await db('mensagem')
+            .where('msg_id', msg.msg_id)
+            .update({ msg_texto: texto, msg_editada_em: db.fn.now(), ...(alerta ? { msg_alerta_contato: true } : {}) })
+
+        avisar(msg.usu_remetente, msg.usu_destinatario)
+        return res.json({ mensagem: 'Mensagem editada.', alerta_contato: alerta })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao editar a mensagem.' })
+    }
+}
+
+/* DELETE /mensagens/:msgId: apaga o conteúdo; na conversa fica "Mensagem apagada" (o histórico não some) */
+export const apagarMensagem = async (req, res) => {
+    try {
+        const r = await minhaMensagemAlteravel(Number(req.params.msgId), req.usuario.id)
+        if (r.erro) return res.status(r.status).json({ erro: r.erro })
+        const { msg } = r
+
+        await db('mensagem')
+            .where('msg_id', msg.msg_id)
+            .update({
+                msg_texto: '',
+                msg_apagada_em: db.fn.now(),
+                ...((await temColuna('mensagem', 'msg_imagem')) ? { msg_imagem: null } : {}),
+                ...((await temColuna('mensagem', 'msg_arquivo')) ? { msg_arquivo: null, msg_arquivo_nome: null } : {})
+            })
+
+        avisar(msg.usu_remetente, msg.usu_destinatario)
+        return res.json({ mensagem: 'Mensagem apagada.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao apagar a mensagem.' })
     }
 }

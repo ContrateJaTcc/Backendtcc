@@ -231,6 +231,53 @@ export const candidatarSe = async (req, res) => {
     }
 }
 
+/* Editar: o freelancer muda valor, prazo e recado da candidatura que ainda espera resposta */
+export const editarCandidatura = async (req, res) => {
+    try {
+        const freelancer = await buscarFreelancer(req.usuario.id)
+        if (!freelancer) return res.status(404).json({ erro: 'Freelancer não encontrado.' })
+
+        if (!(await temColuna('candidatura', 'cand_valor_proposto'))) {
+            return res.status(503).json({ erro: 'Editar a candidatura ainda não está disponível.' })
+        }
+
+        const candidatura = await db('candidatura')
+            .join('servico', 'candidatura.serv_id', 'servico.serv_id')
+            .join('contratante', 'servico.cont_id', 'contratante.cont_id')
+            .where('candidatura.serv_id', req.params.id)
+            .where('candidatura.free_id', freelancer.free_id)
+            .select('candidatura.cand_id', 'candidatura.cand_status', 'servico.serv_titulo', 'servico.serv_status', 'contratante.usu_id as dono_usu_id')
+            .first()
+
+        if (!candidatura || candidatura.cand_status === 'cancelada') {
+            return res.status(404).json({ erro: 'Sua candidatura para este projeto não foi encontrada.' })
+        }
+        if (candidatura.cand_status !== 'pendente' || candidatura.serv_status !== 'aberto') {
+            return res.status(400).json({ erro: 'Só dá para editar uma candidatura que ainda espera resposta.' })
+        }
+
+        const proposta = await lerProposta(req.body ?? {})
+        if (proposta.erro) return res.status(400).json({ erro: proposta.erro })
+
+        await db('candidatura').where('cand_id', candidatura.cand_id).update(proposta.campos)
+
+        const eu = await db('usuario').where('usu_id', req.usuario.id).select('usu_nome').first()
+        const titulo = 'Candidatura atualizada'
+        const texto = `${eu?.usu_nome ?? 'Um freelancer'} mudou a candidatura em "${candidatura.serv_titulo}".`
+        try {
+            await db('notificacao').insert({ usu_id: candidatura.dono_usu_id, not_titulo: titulo, not_desc: texto })
+            await enviarPush(candidatura.dono_usu_id, { titulo, texto, url: '/contratante' })
+        } catch (erro) {
+            console.error(erro)
+        }
+
+        return res.json({ mensagem: 'Candidatura atualizada. O contratante foi avisado.' })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao editar a candidatura.' })
+    }
+}
+
 // Cancelar
 export const cancelarCandidatura = async (req, res) => {
     try {

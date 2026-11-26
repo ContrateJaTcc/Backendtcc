@@ -20,6 +20,7 @@ import * as m14 from './migrations/20261029000000_contratacao_carteira_seguranca
 import * as m15 from './migrations/20261030000000_reino_guildas_reunioes_etapas.js'
 import * as m16 from './migrations/20261101000000_agenda_avisos_moderacao_erros.js'
 import * as m17 from './migrations/20261102000000_rodada_trinta.js'
+import * as m18 from './migrations/20261126000000_crud_completo.js'
 
 export const MIGRACOES = {
     '20260722011946_create_usuario.js': m1,
@@ -39,6 +40,7 @@ export const MIGRACOES = {
     '20261030000000_reino_guildas_reunioes_etapas.js': m15,
     '20261101000000_agenda_avisos_moderacao_erros.js': m16,
     '20261102000000_rodada_trinta.js': m17,
+    '20261126000000_crud_completo.js': m18,
 }
 
 /* Fonte de migrations do knex: mesmos nomes de arquivo que o "npm run migrate" grava em knex_migrations */

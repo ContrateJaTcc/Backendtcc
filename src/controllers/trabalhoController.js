@@ -97,7 +97,7 @@ export const registrarHoras = async (req, res) => {
     }
 }
 
-/* acao: aprovar | recusar (contratante); apagar (freelancer, só pendente) */
+/* acao: aprovar | recusar (contratante); editar | apagar (freelancer, só pendente) */
 export const decidirHoras = async (req, res) => {
     try {
         if (!(await temTabela('hora_registro'))) return semMigracao(res)
@@ -111,6 +111,17 @@ export const decidirHoras = async (req, res) => {
             if (!ehFreelancerDe(s, req.usuario.id) || registro.hor_status !== 'pendente') return res.status(403).json({ erro: 'Só dá para apagar horas suas que ainda não foram aprovadas.' })
             await db('hora_registro').where('hor_id', registro.hor_id).del()
             return res.json({ mensagem: 'Registro apagado.' })
+        }
+        /* Corrigir minutos e descrição de um registro que ainda espera aprovação */
+        if (acao === 'editar') {
+            if (!ehFreelancerDe(s, req.usuario.id) || registro.hor_status !== 'pendente') return res.status(403).json({ erro: 'Só dá para corrigir horas suas que ainda não foram aprovadas.' })
+            const minutos = Number(req.body?.minutos)
+            const desc = String(req.body?.desc ?? '').trim().slice(0, 200)
+            if (!Number.isInteger(minutos) || minutos < 1 || minutos > MAX_MINUTOS_REGISTRO) return res.status(400).json({ erro: 'Informe de 1 minuto a 12 horas.' })
+            if (!desc) return res.status(400).json({ erro: 'Conte o que foi feito nessas horas.' })
+            await db('hora_registro').where('hor_id', registro.hor_id).update({ hor_minutos: minutos, hor_desc: desc })
+            await notificar(s.dono, 'Horas corrigidas', `Um registro em "${s.serv_titulo}" mudou para ${minutos} min. Aprove no histórico.`, '/contratante/historico')
+            return res.json({ mensagem: 'Registro corrigido.' })
         }
         if (acao !== 'aprovar' && acao !== 'recusar') return res.status(400).json({ erro: 'Ação inválida.' })
         if (!ehDonoDe(s, req.usuario.id)) return res.status(403).json({ erro: 'Quem aprova as horas é o contratante.' })
@@ -163,7 +174,7 @@ export const criarCriterio = async (req, res) => {
     }
 }
 
-/* acao: entregue | desfazer (freelancer); aprovar | reprovar (contratante); apagar (contratante, se não aprovado) */
+/* acao: entregue | desfazer (freelancer); aprovar | reprovar | editar | apagar (contratante, se não aprovado) */
 export const mudarCriterio = async (req, res) => {
     try {
         if (!(await temTabela('servico_criterio'))) return semMigracao(res)
@@ -185,6 +196,14 @@ export const mudarCriterio = async (req, res) => {
         } else if (acao === 'apagar' && dono) {
             if (c.cri_aprovado_em) return res.status(400).json({ erro: 'Critério aprovado não pode ser apagado.' })
             await db('servico_criterio').where('cri_id', c.cri_id).del()
+        } else if (acao === 'editar' && dono) {
+            /* Mudar o texto muda o combinado: o "entregue" do freelancer volta a zero e ele é avisado */
+            if (c.cri_aprovado_em) return res.status(400).json({ erro: 'Critério aprovado não pode ser editado.' })
+            const texto = String(req.body?.texto ?? '').trim()
+            if (texto.length < 3 || texto.length > 150) return res.status(400).json({ erro: 'Escreva o critério com 3 a 150 letras (ex.: "Logo em PNG e SVG").' })
+            if (texto === c.cri_texto) return res.json({ mensagem: 'Nada mudou.', criterios: await listaCriterios(s.serv_id) })
+            await db('servico_criterio').where('cri_id', c.cri_id).update({ cri_texto: texto, cri_entregue_em: null })
+            await notificar(s.freelancer, 'Critério de aceite mudou', `"${s.serv_titulo}": ${c.cri_texto} → ${texto}`, '/freelancer/entregues')
         } else {
             return res.status(403).json({ erro: 'Você não pode fazer isso neste critério.' })
         }

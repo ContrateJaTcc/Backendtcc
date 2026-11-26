@@ -53,25 +53,8 @@ export const criarBusca = async (req, res) => {
             return res.status(403).json({ erro: 'Apenas freelancers criam alertas.' })
         }
 
-        const termo = String(req.body.termo ?? '').trim()
-        const tipo_id = req.body.tipo_id ? Number(req.body.tipo_id) : null
-        const valorMin = req.body.valor_min === '' || req.body.valor_min == null ? null : Number(req.body.valor_min)
-
-        if (!termo && !tipo_id) {
-            return res.status(400).json({ erro: 'Escolha uma palavra ou uma categoria para o alerta.' })
-        }
-
-        if (termo.length > LIMITE_TERMO) {
-            return res.status(400).json({ erro: `A palavra pode ter até ${LIMITE_TERMO} letras.` })
-        }
-
-        if (valorMin !== null && (!Number.isFinite(valorMin) || valorMin < 0)) {
-            return res.status(400).json({ erro: 'Valor mínimo inválido.' })
-        }
-
-        if (tipo_id && !(await db('tipo_servico').where('tipo_id', tipo_id).first())) {
-            return res.status(400).json({ erro: 'Categoria não encontrada.' })
-        }
+        const lido = await lerBusca(req.body)
+        if (lido.erro) return res.status(400).json({ erro: lido.erro })
 
         const atuais = await listar(req.usuario.id)
 
@@ -79,17 +62,47 @@ export const criarBusca = async (req, res) => {
             return res.status(400).json({ erro: `Você pode ter até ${LIMITE_BUSCAS} alertas. Apague um para criar outro.` })
         }
 
-        await db('busca_salva').insert({
-            usu_id: req.usuario.id,
-            bus_termo: termo || null,
-            tipo_id,
-            bus_valor_min: valorMin
-        })
+        await db('busca_salva').insert({ usu_id: req.usuario.id, ...lido.campos })
 
         return res.status(201).json({ mensagem: 'Alerta criado! Avisamos quando sair um projeto assim.', buscas: await listar(req.usuario.id) })
     } catch (erro) {
         console.error(erro)
         return res.status(500).json({ erro: 'Erro ao criar o alerta.' })
+    }
+}
+
+/* Palavra, categoria e valor mínimo do corpo; devolve { erro } ou os campos */
+async function lerBusca(body) {
+    const termo = String(body?.termo ?? '').trim()
+    const tipo_id = body?.tipo_id ? Number(body.tipo_id) : null
+    const valorMin = body?.valor_min === '' || body?.valor_min == null ? null : Number(body.valor_min)
+
+    if (!termo && !tipo_id) return { erro: 'Escolha uma palavra ou uma categoria para o alerta.' }
+    if (termo.length > LIMITE_TERMO) return { erro: `A palavra pode ter até ${LIMITE_TERMO} letras.` }
+    if (valorMin !== null && (!Number.isFinite(valorMin) || valorMin < 0)) return { erro: 'Valor mínimo inválido.' }
+    if (tipo_id && !(await db('tipo_servico').where('tipo_id', tipo_id).first())) return { erro: 'Categoria não encontrada.' }
+
+    return { campos: { bus_termo: termo || null, tipo_id, bus_valor_min: valorMin } }
+}
+
+/* PUT /buscas/:id: muda a palavra, a categoria ou o valor mínimo do alerta */
+export const editarBusca = async (req, res) => {
+    try {
+        if (!(await disponivel(res))) return
+
+        const lido = await lerBusca(req.body)
+        if (lido.erro) return res.status(400).json({ erro: lido.erro })
+
+        const alteradas = await db('busca_salva')
+            .where({ bus_id: req.params.id, usu_id: req.usuario.id })
+            .update(lido.campos)
+
+        if (alteradas === 0) return res.status(404).json({ erro: 'Alerta não encontrado.' })
+
+        return res.json({ mensagem: 'Alerta atualizado.', buscas: await listar(req.usuario.id) })
+    } catch (erro) {
+        console.error(erro)
+        return res.status(500).json({ erro: 'Erro ao atualizar o alerta.' })
     }
 }
 

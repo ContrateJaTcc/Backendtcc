@@ -10,6 +10,7 @@ router.use(auth, exigirPapel('freelancer'))
 
 router.get('/', buscaController.listarBuscas)
 router.post('/', buscaController.criarBusca)
+router.put('/:id', buscaController.editarBusca)
 router.delete('/:id', buscaController.removerBusca)
 
 export default router
